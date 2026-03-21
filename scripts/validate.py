@@ -1,6 +1,3 @@
-
-
-
 def inspect_dataframe(dataframe):
     print("Shape:")
     print(dataframe.shape)
