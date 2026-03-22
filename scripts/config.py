@@ -9,12 +9,16 @@ DB_CONFIG = {
     "dbname": os.getenv("DB_NAME"),
     "user": os.getenv("DB_USER"),
     "password": os.getenv("DB_PASSWORD"),
-    "port": os.getenv("DB_PORT")
+    "port": int(os.getenv("DB_PORT"))
 }
 
 PROJECT_ROOT_PATH = Path(__file__).resolve().parent.parent
-RAW_CSV_FILE_PATH = PROJECT_ROOT_PATH / "data" / "raw" / "games.csv"
-CLEANED_CSV_FILE_PATH = PROJECT_ROOT_PATH / "data" / "cleaned" / "steam_games_cleaned.csv"
+RAW_DATA_DIR = PROJECT_ROOT_PATH / "data" / "raw"
+CLEANED_DATA_DIR = PROJECT_ROOT_PATH / "data" / "cleaned"
+
+RAW_CSV_FILE_PATH = RAW_DATA_DIR / "games.csv"
+RAW_JSON_FILE_PATH = RAW_DATA_DIR / "games.json"
+CLEANED_CSV_FILE_PATH = CLEANED_DATA_DIR / "steam_games_cleaned.csv"
 
 CORRECT_COLUMNS_NAMES = [
     "AppID", "Name", "Release date", "Estimated owners",
