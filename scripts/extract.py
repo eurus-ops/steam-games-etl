@@ -24,7 +24,7 @@ def read_raw_games_csv(raw_file_path, correct_column_names):
             names=correct_column_names,
             index_col=False
         )
-        return raw_games_dataframe
+        return raw_games_dataframe, "csv"
     except FileNotFoundError as exc:
         print(f"Raw CSV file not found: {raw_file_path}")
         print(exc)
@@ -53,7 +53,7 @@ def read_raw_games_json(raw_file_path):
 
         raw_games_dataframe = pd.DataFrame(games_list)
 
-        return raw_games_dataframe
+        return raw_games_dataframe, "json"
 
     except FileNotFoundError as exc:
         print(f"Raw JSON file not found: {raw_file_path}")

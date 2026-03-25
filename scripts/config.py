@@ -33,16 +33,36 @@ CORRECT_COLUMNS_NAMES = [
     "Genres", "Tags", "Screenshots", "Movies"
 ]
 
-SELECTED_COLUMNS = [
-    "AppID", "Name", "Release date", "Estimated owners",
-    "Peak CCU", "Required age", "Price", "Discount",
-    "DLC count", "Supported languages", "Full audio languages",
-    "Windows", "Mac", "Linux", "Metacritic score",
-    "Metacritic url", "User score", "Positive", "Negative",
-    "Achievements","Recommendations", "Average playtime forever", "Average playtime two weeks",
-    "Median playtime forever", "Median playtime two weeks", "Developers", "Publishers",
-    "Categories", "Genres"
-]
+JSON_TO_CSV_RENAME = {
+    "name": "Name",
+    "release_date": "Release date",
+    "estimated_owners": "Estimated owners",
+    "peak_ccu": "Peak CCU",
+    "required_age": "Required age",
+    "price": "Price",
+    "discount": "Discount",
+    "dlc_count": "DLC count",
+    "supported_languages": "Supported languages",
+    "full_audio_languages": "Full audio languages",
+    "windows": "Windows",
+    "mac": "Mac",
+    "linux": "Linux",
+    "metacritic_score": "Metacritic score",
+    "metacritic_url": "Metacritic url",
+    "user_score": "User score",
+    "positive": "Positive",
+    "negative": "Negative",
+    "achievements": "Achievements",
+    "recommendations": "Recommendations",
+    "average_playtime_forever": "Average playtime forever",
+    "average_playtime_2weeks": "Average playtime two weeks",
+    "median_playtime_forever": "Median playtime forever",
+    "median_playtime_2weeks": "Median playtime two weeks",
+    "developers": "Developers",
+    "publishers": "Publishers",
+    "categories": "Categories",
+    "genres": "Genres"
+}
 
 COLUMN_RENAME_MAPPING = {
     "AppID": "game_id",
@@ -75,6 +95,26 @@ COLUMN_RENAME_MAPPING = {
     "Categories": "categories",
     "Genres": "genres"
 }
+
+SELECTED_COLUMNS = [
+    "game_id", "game_name", "release_date", "estimated_owners",
+    "peak_ccu", "required_age", "price", "discount",
+    "dlc_count", "supported_languages", "full_audio_languages",
+    "windows", "mac", "linux", "metacritic_score",
+    "metacritic_url", "user_score", "positive", "negative",
+    "achievements", "recommendations", "average_playtime_forever", "average_playtime_2weeks",
+    "median_playtime_forever", "median_playtime_2weeks", "developers", "publishers",
+    "categories", "genres"
+]
+
+LIST_LIKE_COLUMN_NAMES = [
+    "supported_languages",
+    "full_audio_languages",
+    "developers",
+    "publishers",
+    "categories",
+    "genres"
+]
 
 NUMERIC_COLUMN_NAMES = [
     "game_id", "required_age", "price","discount",
