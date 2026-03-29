@@ -2,7 +2,7 @@
 
 This project builds an ETL pipeline for a Steam games dataset from Kaggle and loads cleaned, standardized data into a PostgreSQL database.
 
-The pipeline supports **CSV and JSON** input formats, applies data cleaning and schema standardization, and uses **upsert/incremental-style loading** to handle duplicate `game_id` values more realistically.
+The pipeline supports **CSV and JSON** input formats, applies data cleaning and schema standardization, and uses **upsert/incremental-style loading** to handle duplicate `game_id` values.
 
 Source:  
 https://www.kaggle.com/datasets/fronkongames/steam-games-dataset/data
