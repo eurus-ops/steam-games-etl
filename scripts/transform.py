@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
 import config
+import ast
 
 from logger_config import logger
 
@@ -44,6 +45,18 @@ def normalize_list_like_value(value):
         if len(value) == 0:
             return np.nan
         return ", ".join(map(str, value))
+
+    if isinstance(value, str):
+        list_value = value.strip()
+        try:
+            if list_value.startswith("[") and list_value.endswith("]"):
+                parsed_value = ast.literal_eval(list_value)
+                if isinstance(parsed_value, list):
+                    if len(parsed_value) == 0:
+                        return np.nan
+                    return ", ".join(map(str, parsed_value))
+        except (ValueError, SyntaxError):
+            return value
     return value
 
 
