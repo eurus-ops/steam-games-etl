@@ -77,3 +77,40 @@ def convert_column_types(normalized_cols_dataframe, numeric_columns, date_column
     normalized_cols_dataframe[date_column] = pd.to_datetime(normalized_cols_dataframe[date_column], errors="coerce")
     logger.info("Type conversion completed")
     return normalized_cols_dataframe
+
+
+def split_estimated_owners(value):
+    if pd.isna(value):
+        return pd.Series([np.nan, np.nan])
+
+    text = str(value).strip()
+
+    if "-" not in text:
+        return pd.Series([np.nan, np.nan])
+
+    split_text = text.split("-")
+
+    if len(split_text) != 2:
+        return pd.Series([np.nan, np.nan])
+
+    minimum = split_text[0].strip().replace(",", "")
+    maximum = split_text[1].strip().replace(",", "")
+
+    try:
+        estimated_owners_min = int(minimum)
+        estimated_owners_max = int(maximum)
+        return pd.Series([estimated_owners_min, estimated_owners_max])
+    except ValueError:
+        logger.exception("Invalid estimated_owners value: %s", value)
+        return pd.Series([np.nan, np.nan])
+
+
+def add_estimated_owners_columns(converted_cols_dataframe):
+    converted_dataframe = converted_cols_dataframe.copy()
+
+    converted_dataframe[["estimated_owners_min", "estimated_owners_max"]] = (
+        converted_dataframe["estimated_owners"].apply(split_estimated_owners)
+    )
+
+    return converted_dataframe
+
