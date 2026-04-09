@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 import config
 import ast
+import re
 
 from logger_config import logger
 
@@ -40,23 +41,48 @@ def remove_empty_strings_and_lists(selected_cols_dataframe):
     return selected_columns_dataframe
 
 
+def clean_list_items(items):
+    cleaned_items = [str(item).strip() for item in items if str(item).strip()]
+
+    if len(cleaned_items) == 0:
+        return np.nan
+
+    return cleaned_items
+
+
 def normalize_list_like_value(value):
+    if pd.isna(value):
+        return np.nan
+
     if isinstance(value, list):
-        if len(value) == 0:
-            return np.nan
-        return ", ".join(map(str, value))
+        return clean_list_items(value)
 
     if isinstance(value, str):
         list_value = value.strip()
+        if not list_value:
+            return np.nan
+
+        if not (list_value.startswith("[") and list_value.endswith("]")):
+            string_to_list = list_value.split(",")
+            return clean_list_items(string_to_list)
         try:
-            if list_value.startswith("[") and list_value.endswith("]"):
-                parsed_value = ast.literal_eval(list_value)
-                if isinstance(parsed_value, list):
-                    if len(parsed_value) == 0:
-                        return np.nan
-                    return ", ".join(map(str, parsed_value))
-        except (ValueError, SyntaxError):
+            parsed_value = ast.literal_eval(list_value)
+            if isinstance(parsed_value, list):
+                return clean_list_items(parsed_value)
             return value
+        except (ValueError, SyntaxError):
+            try:
+                fixed_list_value = re.sub(
+                    r"([\[,]\s*)([A-Za-z][A-Za-z']*)(?=\s*[,\]])",
+                    r'\1"\2"',
+                    list_value
+                )
+                parsed_fixed_value = ast.literal_eval(fixed_list_value)
+                if isinstance(parsed_fixed_value, list):
+                    return clean_list_items(parsed_fixed_value)
+                return value
+            except (ValueError, SyntaxError):
+                return value if value else np.nan
     return value
 
 
@@ -106,11 +132,44 @@ def split_estimated_owners(value):
 
 
 def add_estimated_owners_columns(converted_cols_dataframe):
-    converted_dataframe = converted_cols_dataframe.copy()
+    split_column_dataframe = converted_cols_dataframe.copy()
 
-    converted_dataframe[["estimated_owners_min", "estimated_owners_max"]] = (
-        converted_dataframe["estimated_owners"].apply(split_estimated_owners)
+    logger.info("Started splitting estimated_owners columns")
+
+    split_column_dataframe[["estimated_owners_min", "estimated_owners_max"]] = (
+        split_column_dataframe["estimated_owners"].apply(split_estimated_owners)
     )
 
-    return converted_dataframe
+    logger.info("Finished splitting estimated_owners columns")
+
+    return split_column_dataframe
+
+
+def build_steam_games_dataframe(split_col_dataframe):
+    copy_dataframe = split_col_dataframe.copy()
+    steam_games_df = copy_dataframe[config.STEAM_GAMES_DF_COLUMNS]
+
+    return steam_games_df
+
+
+def build_lookup_dataframe(dataframe, source_column, output_column):
+    copy_dataframe = dataframe[[source_column]].copy()
+
+    explode_df = copy_dataframe.explode(source_column)
+    non_null_df = explode_df.dropna(subset=[source_column])
+    non_null_df[source_column] = non_null_df[source_column].astype(str).str.strip()
+    no_dupes_df = non_null_df.drop_duplicates(subset=[source_column], keep="first")
+    rename_col_df = no_dupes_df.rename(columns={source_column: output_column})
+
+    return rename_col_df
+
+
+def build_lookup_dataframes(split_col_dataframe, lookup_mapping):
+    lookup_dataframes = {}
+
+    for source, output in lookup_mapping.items():
+        lookup_dataframes[source] = build_lookup_dataframe(split_col_dataframe, source, output)
+
+    return lookup_dataframes
+
 

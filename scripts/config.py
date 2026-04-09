@@ -1,6 +1,7 @@
 from pathlib import Path
 import os
 from dotenv import load_dotenv
+from unicodedata import category
 
 load_dotenv()
 
@@ -132,3 +133,38 @@ NUMERIC_COLUMN_NAMES = [
 ]
 
 DATE_COLUMN_NAME = "release_date"
+
+STEAM_GAMES_DF_COLUMNS = [
+    "game_id",
+    "game_name",
+    "release_date",
+    "estimated_owners_min",
+    "estimated_owners_max",
+    "peak_ccu",
+    "required_age",
+    "price",
+    "discount",
+    "dlc_count",
+    "windows",
+    "mac",
+    "linux",
+    "metacritic_score",
+    "metacritic_url",
+    "user_score",
+    "positive",
+    "negative",
+    "achievements",
+    "recommendations",
+    "average_playtime_forever",
+    "average_playtime_2weeks",
+    "median_playtime_forever",
+    "median_playtime_2weeks"
+]
+
+LOOKUP_COLUMNS_MAPPING = {
+    "language": "language_name",
+    "developers": "developer_name",
+    "publishers": "publisher_name",
+    "categories": "category_name",
+    "genres": "genre_name"
+}

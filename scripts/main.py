@@ -41,17 +41,17 @@ def main():
         )
         logger.info("Transform completed")
 
-        database_url = load.create_database_url()
-        engine = load.make_engine(db_url=database_url)
-        records = load.convert_dataframe_to_records(
-            converted_cols_dataframe=converted_columns_dataframe
-        )
-
-        load.upsert_dataframe(
-            engine=engine,
-            records=records
-        )
-        logger.info("Upsert completed")
+        # database_url = load.create_database_url()
+        # engine = load.make_engine(db_url=database_url)
+        # records = load.convert_dataframe_to_records(
+        #     converted_cols_dataframe=converted_columns_dataframe
+        # )
+        #
+        # load.upsert_dataframe(
+        #     engine=engine,
+        #     records=records
+        # )
+        # logger.info("Upsert completed")
     except Exception:
         logger.exception("Pipeline failed")
         raise
