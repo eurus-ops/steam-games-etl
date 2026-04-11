@@ -159,17 +159,45 @@ def build_lookup_dataframe(dataframe, source_column, output_column):
     non_null_df = explode_df.dropna(subset=[source_column])
     non_null_df[source_column] = non_null_df[source_column].astype(str).str.strip()
     no_dupes_df = non_null_df.drop_duplicates(subset=[source_column], keep="first")
-    rename_col_df = no_dupes_df.rename(columns={source_column: output_column})
+    rename_col_lookup_df = no_dupes_df.rename(columns={source_column: output_column})
+    final_lookup_df = rename_col_lookup_df.reset_index(drop=True)
 
-    return rename_col_df
+    return final_lookup_df
 
 
-def build_lookup_dataframes(split_col_dataframe, lookup_mapping):
+def build_bridge_dataframe(dataframe, source_column, output_column):
+    copy_dataframe = dataframe[[config.UNIQUE_KEY, source_column]].copy()
+
+    explode_df = copy_dataframe.explode(source_column)
+    non_null_df = explode_df.dropna(subset=[source_column])
+    non_null_df[source_column] = non_null_df[source_column].astype(str).str.strip()
+    no_dupes_df = non_null_df.drop_duplicates(
+        subset=[config.UNIQUE_KEY, source_column],
+        keep="first"
+    )
+    rename_col_bridge_df = no_dupes_df.rename(columns={source_column: output_column})
+    final_bridge_df = rename_col_bridge_df.reset_index(drop=True)
+
+    return final_bridge_df
+
+
+def build_separate_dataframes(split_col_dataframe, lookup_mapping):
     lookup_dataframes = {}
+    bridge_dataframes = {}
 
     for source, output in lookup_mapping.items():
-        lookup_dataframes[source] = build_lookup_dataframe(split_col_dataframe, source, output)
+        lookup_dataframes[source] = build_lookup_dataframe(
+            split_col_dataframe,
+            source,
+            output
+        )
 
-    return lookup_dataframes
+        bridge_dataframes[source] = build_bridge_dataframe(
+            split_col_dataframe,
+            source,
+            output
+        )
+
+    return lookup_dataframes, bridge_dataframes
 
 
