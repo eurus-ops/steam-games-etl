@@ -39,6 +39,15 @@ def main():
             numeric_columns=config.NUMERIC_COLUMN_NAMES,
             date_column=config.DATE_COLUMN_NAME
         )
+
+        split_column_dataframe = transform.add_estimated_owners_columns(
+            converted_cols_dataframe = converted_columns_dataframe
+        )
+
+        steam_games_df, lookup_dfs, bridge_dfs = transform.build_separate_dataframes(
+            split_col_dataframe = split_column_dataframe,
+            lookup_mapping = config.RENAME_LOOKUP_COLUMNS_MAPPING
+        )
         logger.info("Transform completed")
 
         # database_url = load.create_database_url()

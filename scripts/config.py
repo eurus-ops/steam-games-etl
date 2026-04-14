@@ -1,7 +1,6 @@
 from pathlib import Path
 import os
 from dotenv import load_dotenv
-from unicodedata import category
 
 load_dotenv()
 
@@ -161,10 +160,59 @@ STEAM_GAMES_DF_COLUMNS = [
     "median_playtime_2weeks"
 ]
 
-LOOKUP_COLUMNS_MAPPING = {
-    "language": "language_name",
+RENAME_LOOKUP_COLUMNS_MAPPING = {
+    "supported_languages": "language_name",
     "developers": "developer_name",
     "publishers": "publisher_name",
     "categories": "category_name",
     "genres": "genre_name"
+}
+
+FK_LOOKUP_COLUMNS_MAPPING = [
+    "language_id", "developer_id", "publisher_id", "category_id", "genre_id"
+]
+
+BRIDGE_TABLES_CONFIG = {
+    "supported_languages": {
+        "lookup_table": "languages",
+        "bridge_table": "game_supported_languages",
+        "unique_key": UNIQUE_KEY,
+        "output_column": "language_name",
+        "id_column": "language_id",
+    },
+    "full_audio_languages": {
+        "lookup_table": "languages",
+        "bridge_table": "game_full_audio_languages",
+        "unique_key": UNIQUE_KEY,
+        "output_column": "language_name",
+        "id_column": "language_id",
+    },
+    "developers": {
+        "lookup_table": "developers",
+        "bridge_table": "game_developers",
+        "unique_key": UNIQUE_KEY,
+        "output_column": "developer_name",
+        "id_column": "developer_id",
+    },
+    "publishers": {
+        "lookup_table": "publishers",
+        "bridge_table": "game_publishers",
+        "unique_key": UNIQUE_KEY,
+        "output_column": "publisher_name",
+        "id_column": "publisher_id",
+    },
+    "categories": {
+        "lookup_table": "categories",
+        "bridge_table": "game_categories",
+        "unique_key": UNIQUE_KEY,
+        "output_column": "category_name",
+        "id_column": "category_id",
+    },
+    "genres": {
+        "lookup_table": "genres",
+        "bridge_table": "game_genres",
+        "unique_key": UNIQUE_KEY,
+        "output_column": "genre_name",
+        "id_column": "genre_id",
+    },
 }

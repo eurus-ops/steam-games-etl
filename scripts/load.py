@@ -1,7 +1,8 @@
 from sqlalchemy import create_engine, URL, text
 from sqlalchemy.exc import SQLAlchemyError
-
 from logger_config import logger
+
+import pandas as pd
 
 import config
 
@@ -35,28 +36,70 @@ def convert_dataframe_to_records(converted_cols_dataframe):
     return dataframe_to_dict
 
 
-def upsert_dataframe(engine, records):
-    logger.info("Upsert started")
-    columns = ", ".join(config.SELECTED_COLUMNS)
-    values = ", ".join(f":{col}" for col in config.SELECTED_COLUMNS)
-    lines = [f"{col} = EXCLUDED.{col}" for col in config.SELECTED_COLUMNS if col != config.UNIQUE_KEY]
-    value_set = ", ".join(lines)
+# def upsert_query():
+#     logger.info("Upsert started")
+#     columns = ", ".join(config.SELECTED_COLUMNS)
+#     values = ", ".join(f":{col}" for col in config.SELECTED_COLUMNS)
+#     lines = [f"{col} = EXCLUDED.{col}" for col in config.SELECTED_COLUMNS if col != config.UNIQUE_KEY]
+#     value_set = ", ".join(lines)
+#
+#     if not records:
+#         return
+#
+#     sql_text = text(f"""
+#     INSERT INTO {config.TABLE_NAME} ({columns})
+#     VALUES ({values})
+#     ON CONFLICT ({config.UNIQUE_KEY})
+#     DO UPDATE SET
+#     {value_set}
+#     """)
+#
+#     try:
+#         with engine.begin() as conn:
+#             conn.execute(sql_text, records)
+#         logger.info("Rows upserted successfully")
+#     except SQLAlchemyError:
+#         logger.exception("Failed to upsert a table in PostgreSQL")
+#         raise
 
-    if not records:
-        return
 
-    sql_text = text(f"""
-    INSERT INTO {config.TABLE_NAME} ({columns})
-    VALUES ({values})
-    ON CONFLICT ({config.UNIQUE_KEY})
-    DO UPDATE SET
-    {value_set}
-    """)
-
+def load_bridge_tables(engine, bridge_dataframes, bridge_table_mapping):
+    target_bridge_table = ""
     try:
-        with engine.begin() as conn:
-            conn.execute(sql_text, records)
-        logger.info("Rows upserted successfully")
+        for source_name, config_values in bridge_table_mapping.items():
+            lookup_table = config_values["lookup_table"]
+            target_bridge_table = config_values["bridge_table"]
+            output_col = config_values["output_column"]
+            fk_col = config_values["id_column"]
+
+            sql_text = text(f"""
+                SELECT id AS lookup_id, {output_col}
+                FROM {lookup_table}
+            """)
+            lookup_map = pd.read_sql_query(sql_text, engine)
+
+            bridge_df = bridge_dataframes[source_name].copy()
+
+            merged_df = bridge_df.merge(
+                lookup_map,
+                on=output_col,
+                how="inner"
+            )
+
+            final_to_load_df = merged_df[[config.UNIQUE_KEY, "lookup_id"]].rename(
+                columns={"lookup_id": fk_col}
+            )
+
+            final_to_load_df = final_to_load_df.drop_duplicates()
+
+            final_to_load_df.to_sql(
+                target_bridge_table,
+                con=engine,
+                if_exists="append",
+                index=False
+            )
+
+            logger.info(f"Loaded bridge table: {target_bridge_table}")
     except SQLAlchemyError:
-        logger.exception("Failed to upsert to steam_games table in PostgreSQL")
+        logger.exception(f"Failed to load bridge table: {target_bridge_table}")
         raise
