@@ -145,13 +145,6 @@ def add_estimated_owners_columns(converted_cols_dataframe):
     return split_column_dataframe
 
 
-def build_steam_games_dataframe(split_col_dataframe):
-    copy_dataframe = split_col_dataframe.copy()
-    steam_games_df = copy_dataframe[config.STEAM_GAMES_DF_COLUMNS]
-
-    return steam_games_df
-
-
 def build_lookup_dataframe(dataframe, source_column, output_column):
     copy_dataframe = dataframe[[source_column]].copy()
 
@@ -184,6 +177,9 @@ def build_bridge_dataframe(dataframe, source_column, output_column):
 def build_separate_dataframes(split_col_dataframe, lookup_mapping):
     lookup_dataframes = {}
     bridge_dataframes = {}
+    copy_dataframe = split_col_dataframe.copy()
+
+    steam_games_dataframe = copy_dataframe[config.STEAM_GAMES_DF_COLUMNS]
 
     for source, output in lookup_mapping.items():
         lookup_dataframes[source] = build_lookup_dataframe(
@@ -198,6 +194,6 @@ def build_separate_dataframes(split_col_dataframe, lookup_mapping):
             output
         )
 
-    return lookup_dataframes, bridge_dataframes
+    return steam_games_dataframe, lookup_dataframes, bridge_dataframes
 
 

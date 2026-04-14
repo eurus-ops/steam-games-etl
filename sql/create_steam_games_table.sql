@@ -63,7 +63,7 @@ CREATE TABLE game_supported_languages (
     FOREIGN KEY (language_id) REFERENCES languages(id) ON DELETE CASCADE
 );
 
-CREATE TABLE game_audio_languages (
+CREATE TABLE game_full_audio_languages (
     game_id BIGINT NOT NULL,
     language_id BIGINT NOT NULL,
     PRIMARY KEY (game_id, language_id),
