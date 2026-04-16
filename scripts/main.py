@@ -1,6 +1,8 @@
 import config, extract, transform, validate, load
 from logger_config import logger
 
+from pprint import pprint
+
 
 def main():
     try:
@@ -18,7 +20,6 @@ def main():
             raw_dataframe=raw_games_dataframe,
             source_file=file_type
         )
-
 
         selected_columns_dataframe = transform.select_columns(
             raw_dataframe=renamed_columns_dataframe,
@@ -45,10 +46,16 @@ def main():
         )
 
         steam_games_df, lookup_dfs, bridge_dfs = transform.build_separate_dataframes(
-            split_col_dataframe = split_column_dataframe,
-            lookup_mapping = config.RENAME_LOOKUP_COLUMNS_MAPPING
+            split_col_dataframe=split_column_dataframe,
+            lookup_mapping=config.LOOKUP_MAPPING,
+            bridge_mapping=config.BRIDGE_MAPPING,
         )
+
         logger.info("Transform completed")
+
+        steam_games_records = load.convert_dataframe_to_records(steam_games_df)
+        lookup_records = load.convert_dataframe_to_records(lookup_dfs)
+        bridge_records = load.convert_dataframe_to_records(bridge_dfs)
 
         # database_url = load.create_database_url()
         # engine = load.make_engine(db_url=database_url)

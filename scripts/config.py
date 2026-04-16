@@ -26,7 +26,8 @@ LOGS_DIR = PROJECT_ROOT_PATH / "logs"
 LOG_FILE_PATH = LOGS_DIR / "etl_pipeline.log"
 
 TABLE_NAME = "steam_games"
-UNIQUE_KEY = "game_id"
+MAIN_TABLE_UNIQUE_KEY = "game_id"
+LOOKUP_TABLE_UNIQUE_KEY = "id"
 
 CORRECT_COLUMNS_NAMES = [
     "AppID", "Name", "Release date", "Estimated owners",
@@ -133,7 +134,7 @@ NUMERIC_COLUMN_NAMES = [
 
 DATE_COLUMN_NAME = "release_date"
 
-STEAM_GAMES_DF_COLUMNS = [
+STEAM_GAMES_COLUMNS = [
     "game_id",
     "game_name",
     "release_date",
@@ -160,12 +161,27 @@ STEAM_GAMES_DF_COLUMNS = [
     "median_playtime_2weeks"
 ]
 
-RENAME_LOOKUP_COLUMNS_MAPPING = {
-    "supported_languages": "language_name",
+LOOKUP_MAPPING = {
     "developers": "developer_name",
     "publishers": "publisher_name",
     "categories": "category_name",
-    "genres": "genre_name"
+    "genres": "genre_name",
+}
+
+LANGUAGE_LOOKUP_SOURCE_COLUMNS = [
+    "supported_languages",
+    "full_audio_languages",
+]
+
+LANGUAGE_LOOKUP_OUTPUT_COLUMN = "language_name"
+
+BRIDGE_MAPPING = {
+    "supported_languages": "language_name",
+    "full_audio_languages": "language_name",
+    "developers": "developer_name",
+    "publishers": "publisher_name",
+    "categories": "category_name",
+    "genres": "genre_name",
 }
 
 FK_LOOKUP_COLUMNS_MAPPING = [
@@ -176,43 +192,52 @@ BRIDGE_TABLES_CONFIG = {
     "supported_languages": {
         "lookup_table": "languages",
         "bridge_table": "game_supported_languages",
-        "unique_key": UNIQUE_KEY,
+        "unique_key": LOOKUP_TABLE_UNIQUE_KEY,
         "output_column": "language_name",
-        "id_column": "language_id",
+        "id_column": "language_id"
     },
     "full_audio_languages": {
         "lookup_table": "languages",
         "bridge_table": "game_full_audio_languages",
-        "unique_key": UNIQUE_KEY,
+        "unique_key": LOOKUP_TABLE_UNIQUE_KEY,
         "output_column": "language_name",
-        "id_column": "language_id",
+        "id_column": "language_id"
     },
     "developers": {
         "lookup_table": "developers",
         "bridge_table": "game_developers",
-        "unique_key": UNIQUE_KEY,
+        "unique_key": LOOKUP_TABLE_UNIQUE_KEY,
         "output_column": "developer_name",
-        "id_column": "developer_id",
+        "id_column": "developer_id"
     },
     "publishers": {
         "lookup_table": "publishers",
         "bridge_table": "game_publishers",
-        "unique_key": UNIQUE_KEY,
+        "unique_key": LOOKUP_TABLE_UNIQUE_KEY,
         "output_column": "publisher_name",
-        "id_column": "publisher_id",
+        "id_column": "publisher_id"
     },
     "categories": {
         "lookup_table": "categories",
         "bridge_table": "game_categories",
-        "unique_key": UNIQUE_KEY,
+        "unique_key": LOOKUP_TABLE_UNIQUE_KEY,
         "output_column": "category_name",
-        "id_column": "category_id",
+        "id_column": "category_id"
     },
     "genres": {
         "lookup_table": "genres",
         "bridge_table": "game_genres",
-        "unique_key": UNIQUE_KEY,
+        "unique_key": LOOKUP_TABLE_UNIQUE_KEY,
         "output_column": "genre_name",
-        "id_column": "genre_id",
-    },
+        "id_column": "genre_id"
+    }
+}
+
+TABLES_AND_COLUMNS_MAPPING = {
+    TABLE_NAME: STEAM_GAMES_COLUMNS,
+    "languages": ["id", "language_name"],
+    "developers": ["id", "developer_name"],
+    "publishers": ["id", "publisher_name"],
+    "categories": ["id", "category_name"],
+    "genres": ["id", "genre_name"]
 }

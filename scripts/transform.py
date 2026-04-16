@@ -159,13 +159,13 @@ def build_lookup_dataframe(dataframe, source_column, output_column):
 
 
 def build_bridge_dataframe(dataframe, source_column, output_column):
-    copy_dataframe = dataframe[[config.UNIQUE_KEY, source_column]].copy()
+    copy_dataframe = dataframe[[config.MAIN_TABLE_UNIQUE_KEY, source_column]].copy()
 
     explode_df = copy_dataframe.explode(source_column)
     non_null_df = explode_df.dropna(subset=[source_column])
     non_null_df[source_column] = non_null_df[source_column].astype(str).str.strip()
     no_dupes_df = non_null_df.drop_duplicates(
-        subset=[config.UNIQUE_KEY, source_column],
+        subset=[config.MAIN_TABLE_UNIQUE_KEY, source_column],
         keep="first"
     )
     rename_col_bridge_df = no_dupes_df.rename(columns={source_column: output_column})
@@ -174,24 +174,45 @@ def build_bridge_dataframe(dataframe, source_column, output_column):
     return final_bridge_df
 
 
-def build_separate_dataframes(split_col_dataframe, lookup_mapping):
+def build_combined_lookup_dataframe(dataframe, source_columns, output_column):
+    lookup_frames = []
+
+    for source_column in source_columns:
+        lookup_df = build_lookup_dataframe(dataframe, source_column, output_column)
+        lookup_frames.append(lookup_df)
+
+    combined_lookup_df = pd.concat(lookup_frames, ignore_index=True)
+    combined_lookup_df = combined_lookup_df.drop_duplicates(subset=[output_column], keep="first")
+    combined_lookup_df = combined_lookup_df.reset_index(drop=True)
+
+    return combined_lookup_df
+
+
+def build_separate_dataframes(split_col_dataframe, lookup_mapping, bridge_mapping):
     lookup_dataframes = {}
     bridge_dataframes = {}
     copy_dataframe = split_col_dataframe.copy()
 
-    steam_games_dataframe = copy_dataframe[config.STEAM_GAMES_DF_COLUMNS]
+    steam_games_dataframe = copy_dataframe[config.STEAM_GAMES_COLUMNS]
 
-    for source, output in lookup_mapping.items():
-        lookup_dataframes[source] = build_lookup_dataframe(
+    for source_column, output_column in lookup_mapping.items():
+        lookup_dataframes[source_column] = build_lookup_dataframe(
             split_col_dataframe,
-            source,
-            output
+            source_column,
+            output_column,
         )
 
-        bridge_dataframes[source] = build_bridge_dataframe(
+    lookup_dataframes["languages"] = build_combined_lookup_dataframe(
+        split_col_dataframe,
+        config.LANGUAGE_LOOKUP_SOURCE_COLUMNS,
+        config.LANGUAGE_LOOKUP_OUTPUT_COLUMN,
+    )
+
+    for source_column, output_column in bridge_mapping.items():
+        bridge_dataframes[source_column] = build_bridge_dataframe(
             split_col_dataframe,
-            source,
-            output
+            source_column,
+            output_column,
         )
 
     return steam_games_dataframe, lookup_dataframes, bridge_dataframes
