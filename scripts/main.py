@@ -35,8 +35,13 @@ def main():
             list_like_column_names=config.LIST_LIKE_COLUMN_NAMES
         )
 
+        language_cleaned_dataframe = transform.clean_language_columns(
+            dataframe=normalized_columns_dataframe,
+            language_column_names=config.LANGUAGE_LOOKUP_SOURCE_COLUMNS
+        )
+
         converted_columns_dataframe = transform.convert_column_types(
-            normalized_cols_dataframe=normalized_columns_dataframe,
+            normalized_cols_dataframe=language_cleaned_dataframe,
             numeric_columns=config.NUMERIC_COLUMN_NAMES,
             date_column=config.DATE_COLUMN_NAME
         )
@@ -55,19 +60,29 @@ def main():
 
         steam_games_records = load.convert_dataframe_to_records(steam_games_df)
         lookup_records = load.convert_dataframe_to_records(lookup_dfs)
-        bridge_records = load.convert_dataframe_to_records(bridge_dfs)
 
-        # database_url = load.create_database_url()
-        # engine = load.make_engine(db_url=database_url)
-        # records = load.convert_dataframe_to_records(
-        #     converted_cols_dataframe=converted_columns_dataframe
-        # )
-        #
-        # load.upsert_dataframe(
-        #     engine=engine,
-        #     records=records
-        # )
-        # logger.info("Upsert completed")
+        database_url = load.create_database_url()
+        engine = load.make_engine(db_url=database_url)
+
+        load.upsert_one_table(
+            engine=engine,
+            table_name=config.TABLE_NAME,
+            columns_list=config.TABLES_AND_COLUMNS_MAPPING["steam_games"],
+            conflict_column=config.MAIN_TABLE_UNIQUE_KEY,
+            records=steam_games_records,
+        )
+
+        load.upsert_lookup_tables(
+            engine=engine,
+            lookup_records=lookup_records,
+        )
+
+        load.load_bridge_tables(
+            engine=engine,
+            bridge_dataframes=bridge_dfs,
+            bridge_table_mapping=config.BRIDGE_TABLES_CONFIG
+        )
+        logger.info("Upsert completed")
     except Exception:
         logger.exception("Pipeline failed")
         raise

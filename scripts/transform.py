@@ -3,6 +3,7 @@ import pandas as pd
 import config
 import ast
 import re
+import html
 
 from logger_config import logger
 
@@ -42,6 +43,38 @@ def remove_empty_strings_and_lists(selected_cols_dataframe):
 
 
 def clean_list_items(items):
+    """
+    Clean the contents of an existing Python list.
+
+    Purpose:
+        Takes a list of raw items and returns a cleaned list where:
+        - each item is converted to string
+        - leading/trailing spaces are removed
+        - empty items are removed
+
+        If nothing usable remains, return np.nan.
+
+    Parameters:
+        items (list):
+            A Python list containing raw values.
+
+    Returns:
+        list | np.nan:
+            A cleaned list of strings, or np.nan if the list becomes empty.
+
+    Example:
+        Input:
+            [" Action ", "", "RPG", "   "]
+
+        Output:
+            ["Action", "RPG"]
+
+        Input:
+            ["", "   "]
+
+        Output:
+            np.nan
+    """
     cleaned_items = [str(item).strip() for item in items if str(item).strip()]
 
     if len(cleaned_items) == 0:
@@ -51,6 +84,55 @@ def clean_list_items(items):
 
 
 def normalize_list_like_value(value):
+    """
+    Normalize one dataframe cell into a clean Python list if it represents list-like data.
+
+    Purpose:
+        Handles one raw cell value that may be:
+        - np.nan
+        - an actual Python list
+        - a comma-separated string
+        - a string representation of a Python list
+        - a malformed list string that may need repair
+
+        The goal is to return:
+        - a clean Python list of strings
+        - or np.nan if the value is empty/unusable
+
+    Parameters:
+        value (Any):
+            One cell value from a dataframe column.
+
+    Returns:
+        list | np.nan | original value:
+            Usually a cleaned Python list or np.nan.
+            In some fallback cases, returns the original value if parsing fails.
+
+    Example:
+        Input:
+            [" Action ", "RPG", ""]
+
+        Output:
+            ["Action", "RPG"]
+
+        Input:
+            "Action, RPG"
+
+        Output:
+            ["Action", "RPG"]
+
+        Input:
+            "['Action', 'RPG']"
+
+        Output:
+            ["Action", "RPG"]
+
+        Input:
+            np.nan
+
+        Output:
+            np.nan
+    """
     if pd.isna(value):
         return np.nan
 
@@ -87,6 +169,41 @@ def normalize_list_like_value(value):
 
 
 def normalize_list_like_columns(cleaned_cols_dataframe, list_like_column_names):
+    """
+    Normalize multiple dataframe columns that contain list-like values.
+
+    Purpose:
+        Applies normalize_list_like_value() to every cell in the specified columns.
+
+        This is the dataframe-level wrapper around the one-cell normalizer.
+
+    Parameters:
+        cleaned_cols_dataframe (pd.DataFrame):
+            The dataframe containing raw/cleaned columns before full normalization.
+
+        list_like_column_names (list[str]):
+            Column names that should be treated as list-like columns.
+
+    Returns:
+        pd.DataFrame:
+            A copy of the dataframe where the specified columns are normalized
+            into clean Python lists or np.nan.
+
+    Example:
+        Input dataframe:
+            genres
+            -------------------
+            "['Action', 'RPG']"
+            "Adventure, Puzzle"
+            np.nan
+
+        Output dataframe:
+            genres
+            -------------------
+            ["Action", "RPG"]
+            ["Adventure", "Puzzle"]
+            np.nan
+    """
     normalized_dataframe = cleaned_cols_dataframe.copy()
 
     for column in list_like_column_names:
@@ -94,6 +211,311 @@ def normalize_list_like_columns(cleaned_cols_dataframe, list_like_column_names):
             normalized_dataframe[column] = normalized_dataframe[column].apply(normalize_list_like_value)
     logger.info("List-like columns normalized")
     return normalized_dataframe
+
+
+def clean_language_item(language):
+    """
+    Clean one raw language value.
+
+    Purpose:
+        Takes one language item and removes messy formatting/noise such as:
+        - HTML entities like &amp;lt;strong&amp;gt;
+        - BBCode tags like [b][/b]
+        - HTML tags like <strong>, <br />
+        - the text marker "(full audio)"
+        - extra spaces and repeated line breaks
+
+    Important:
+        This function cleans only ONE item.
+        It does not split a combined string into multiple languages.
+        That job belongs to split_cleaned_language_text().
+
+    Parameters:
+        language (Any):
+            One raw language value, usually a string like:
+            "English[b][/b]"
+            "English (full audio)"
+            "English&amp;lt;strong&amp;gt;&amp;lt;/strong&amp;gt;"
+            or a missing value like np.nan / None
+
+    Returns:
+        str | np.nan:
+            - Cleaned language text as a string
+            - np.nan if the value is empty or missing
+
+    Example:
+        Input:
+            "English[b][/b]"
+        Output:
+            "English"
+
+        Input:
+            "English (full audio)"
+        Output:
+            "English"
+
+        Input:
+            "Japanese &amp;lt;br /&amp;gt;&amp;lt;br /&amp;gt;&amp;lt;strong&amp;gt;&amp;lt;/strong&amp;gt;"
+        Output:
+            "Japanese"
+
+        Input:
+            np.nan
+        Output:
+            np.nan
+    """
+    if isinstance(language, list):
+        return np.nan
+
+    if language is None:
+        return np.nan
+
+    if isinstance(language, float) and pd.isna(language):
+        return np.nan
+
+    text = str(language).strip()
+
+    if not text:
+        return np.nan
+
+    # Decode HTML entities multiple times because some values are double/triple encoded
+    previous_text = None
+    while text != previous_text:
+        previous_text = text
+        text = html.unescape(text)
+
+    # Remove BBCode and HTML tags
+    text = re.sub(r"\[/?b\]", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
+    text = re.sub(r"</?strong>", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"<[^>]+>", "", text)
+
+    # Remove "(full audio)" marker
+    text = re.sub(r"\(full audio\)", "", text, flags=re.IGNORECASE)
+
+    # Normalize line breaks and spaces
+    text = text.replace("\r", "\n")
+    text = re.sub(r"\n+", "\n", text)
+    text = re.sub(r"\s+", " ", text).strip()
+
+    if not text:
+        return np.nan
+
+    return text
+
+
+def split_cleaned_language_text(text):
+    """
+    Split one cleaned language string into multiple language items if needed.
+
+    Purpose:
+        Takes a cleaned string and checks if it actually contains multiple
+        languages joined together by line breaks.
+
+        Example:
+            "English\\nRussian\\nSpanish - Spain"
+        should become:
+            ["English", "Russian", "Spanish - Spain"]
+
+        If there are no line breaks, this function keeps the value as
+        a one-item list.
+
+    Parameters:
+        text (Any):
+            A cleaned language string, or a missing value.
+
+    Returns:
+        list[str] | np.nan:
+            - A list of one or more cleaned language values
+            - np.nan if the value is empty or missing
+
+    Example:
+        Input:
+            "English\\nRussian\\nSpanish - Spain"
+        Output:
+            ["English", "Russian", "Spanish - Spain"]
+
+        Input:
+            "English"
+        Output:
+            ["English"]
+
+        Input:
+            np.nan
+        Output:
+            np.nan
+    """
+    if text is None:
+        return np.nan
+
+    if isinstance(text, float) and pd.isna(text):
+        return np.nan
+
+    text = str(text).strip()
+
+    if not text:
+        return np.nan
+
+    # Split by line breaks if present
+    if "\n" in text:
+        parts = [part.strip() for part in text.split("\n") if part.strip()]
+        return parts if parts else np.nan
+
+    # Otherwise keep as one item
+    return [text]
+
+
+def clean_language_list(value):
+    """
+    Clean one language column cell and return a normalized list of languages.
+
+    Purpose:
+        This function handles one dataframe cell from a language column
+        such as supported_languages or full_audio_languages.
+
+        It:
+        1. makes sure the value is handled as a list of raw items
+        2. cleans each item using clean_language_item()
+        3. splits combined text using split_cleaned_language_text()
+        4. removes duplicates while preserving order
+        5. returns a final clean list of languages
+
+    This function is the main cell-level cleaner for language columns.
+
+    Parameters:
+        value (Any):
+            One cell from a language column.
+            It may already be:
+            - a Python list
+            - a single string
+            - a missing value
+
+    Returns:
+        list[str] | np.nan:
+            - A cleaned list of languages
+            - np.nan if nothing usable remains
+
+    Example:
+        Input:
+            ["English[b][/b]", "French", "Italian \\r\\n\\r\\n[b][/b] "]
+        Output:
+            ["English", "French", "Italian"]
+
+        Input:
+            ["English (full audio)", "French", "English"]
+        Output:
+            ["English", "French"]
+
+        Input:
+            "English\\nRussian\\nSpanish - Spain"
+        Output:
+            ["English", "Russian", "Spanish - Spain"]
+
+        Input:
+            np.nan
+        Output:
+            np.nan
+    """
+    if isinstance(value, list):
+        raw_values = value
+    elif value is None:
+        return np.nan
+    elif isinstance(value, float) and pd.isna(value):
+        return np.nan
+    else:
+        raw_values = [value]
+
+    cleaned_languages = []
+
+    for item in raw_values:
+        cleaned_item = clean_language_item(item)
+
+        if cleaned_item is None:
+            continue
+        if isinstance(cleaned_item, float) and pd.isna(cleaned_item):
+            continue
+
+        split_items = split_cleaned_language_text(cleaned_item)
+
+        if split_items is None:
+            continue
+        if isinstance(split_items, float) and pd.isna(split_items):
+            continue
+
+        cleaned_languages.extend(split_items)
+
+    # Final cleanup: deduplicate while preserving order
+    final_languages = []
+    seen = set()
+
+    for lang in cleaned_languages:
+        lang = str(lang).strip()
+        if not lang:
+            continue
+        if lang not in seen:
+            seen.add(lang)
+            final_languages.append(lang)
+
+    if not final_languages:
+        return np.nan
+
+    return final_languages
+
+
+def clean_language_columns(dataframe, language_column_names):
+    """
+    Apply language cleaning to selected dataframe columns.
+
+    Purpose:
+        This is the dataframe-level wrapper for clean_language_list().
+
+        It loops through the specified language columns and cleans each cell.
+
+        Typical target columns:
+            - supported_languages
+            - full_audio_languages
+
+    Parameters:
+        dataframe (pd.DataFrame):
+            The dataframe containing language columns to clean.
+
+        language_column_names (list[str]):
+            Column names that should be processed by clean_language_list().
+
+    Returns:
+        pd.DataFrame:
+            A copy of the dataframe where the selected language columns
+            now contain:
+            - cleaned Python lists of language names
+            - or np.nan if empty
+
+    Example:
+        Input dataframe:
+            supported_languages
+            ---------------------------------------------
+            ["English[b][/b]", "French", "Italian \\r\\n\\r\\n[b][/b] "]
+            ["English (full audio)", "French", "English"]
+
+        Output dataframe:
+            supported_languages
+            --------------------------------
+            ["English", "French", "Italian"]
+            ["English", "French"]
+
+    Example call:
+        clean_language_columns(
+            dataframe=dataframe,
+            language_column_names=["supported_languages", "full_audio_languages"]
+        )
+    """
+    cleaned_dataframe = dataframe.copy()
+
+    for column in language_column_names:
+        if column in cleaned_dataframe.columns:
+            cleaned_dataframe[column] = cleaned_dataframe[column].apply(clean_language_list)
+
+    logger.info("Language columns cleaned")
+    return cleaned_dataframe
 
 
 def convert_column_types(normalized_cols_dataframe, numeric_columns, date_column):

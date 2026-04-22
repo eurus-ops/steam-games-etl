@@ -235,9 +235,17 @@ BRIDGE_TABLES_CONFIG = {
 
 TABLES_AND_COLUMNS_MAPPING = {
     TABLE_NAME: STEAM_GAMES_COLUMNS,
-    "languages": ["id", "language_name"],
-    "developers": ["id", "developer_name"],
-    "publishers": ["id", "publisher_name"],
-    "categories": ["id", "category_name"],
-    "genres": ["id", "genre_name"]
+    "languages": ["language_name"],
+    "developers": ["developer_name"],
+    "publishers": ["publisher_name"],
+    "categories": ["category_name"],
+    "genres": ["genre_name"]
+}
+
+LOOKUP_TABLE_CONFLICT_COLUMNS = {
+    "languages": "language_name",
+    "developers": "developer_name",
+    "publishers": "publisher_name",
+    "categories": "category_name",
+    "genres": "genre_name"
 }

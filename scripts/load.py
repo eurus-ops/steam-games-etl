@@ -45,33 +45,47 @@ def convert_dataframe_to_records(data):
     raise TypeError("Input must be a pandas DataFrame or a dictionary of DataFrames")
 
 
-def upsert_query(engine, records):
-    for key_table, cols in config.TABLES_AND_COLUMNS_MAPPING.items():
-        columns = ", ".join(cols)
-        values = ", ".join(f":{col}" for col in cols)
-        lines = [f"{col} = EXCLUDED.{col}" for col in cols if
-                 col not in config.MAIN_TABLE_UNIQUE_KEY and config.LOOKUP_TABLE_UNIQUE_KEY]
-        value_set = ", ".join(lines)
-        unique_key = config.MAIN_TABLE_UNIQUE_KEY if key_table == "steam_games" else config.LOOKUP_TABLE_UNIQUE_KEY
+def upsert_one_table(engine, table_name, columns_list, conflict_column, records):
+    if not records:
+        logger.info("No records to upsert for table: %s", table_name)
+        return
 
-        if not records:
-            return
+    columns = ", ".join(columns_list)
+    values = ", ".join(f":{col}" for col in columns_list)
+    update_lines = [f"{col} = EXCLUDED.{col}" for col in columns_list if col != conflict_column]
+    if update_lines:
+        conflict_action = f"DO UPDATE SET {', '.join(update_lines)}"
+    else:
+        conflict_action = "DO NOTHING"
 
-        sql_text = (f"""
-            INSERT INTO {key_table} ({columns})
+    sql_text = text(f"""
+            INSERT INTO {table_name} ({columns})
             VALUES ({values})
-            ON CONFLICT ({unique_key})
-            DO UPDATE SET
-            {value_set}
+            ON CONFLICT ({conflict_column})
+            {conflict_action}
         """)
 
-        try:
-            with engine.begin() as conn:
-                conn.execute(sql_text, records)
-            logger.info("Rows upserted successfully")
-        except SQLAlchemyError:
-            logger.exception("Failed to upsert a table in PostgreSQL")
-            raise
+    try:
+        with engine.begin() as conn:
+            conn.execute(sql_text, records)
+        logger.info("Rows upserted successfully to table: %s", table_name)
+    except SQLAlchemyError:
+        logger.exception("Failed to upsert table: %s", table_name)
+        raise
+
+
+def upsert_lookup_tables(engine, lookup_records):
+    for table_name, records in lookup_records.items():
+        columns_list = config.TABLES_AND_COLUMNS_MAPPING[table_name]
+        conflict_column = config.LOOKUP_TABLE_CONFLICT_COLUMNS[table_name]
+
+        upsert_one_table(
+            engine=engine,
+            table_name=table_name,
+            columns_list=columns_list,
+            conflict_column=conflict_column,
+            records=records,
+        )
 
 
 def prepare_bridge_load_dataframe(connection, bridge_df, lookup_table, output_col, fk_col):
