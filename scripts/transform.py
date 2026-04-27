@@ -90,7 +90,10 @@ def normalize_list_like_value(value):
     Purpose:
         Handles one raw cell value that may be:
         - np.nan
+        - None
         - an actual Python list
+        - a tuple
+        - a numpy array
         - a comma-separated string
         - a string representation of a Python list
         - a malformed list string that may need repair
@@ -116,6 +119,12 @@ def normalize_list_like_value(value):
             ["Action", "RPG"]
 
         Input:
+            np.array(["English", "French"])
+
+        Output:
+            ["English", "French"]
+
+        Input:
             "Action, RPG"
 
         Output:
@@ -133,25 +142,45 @@ def normalize_list_like_value(value):
         Output:
             np.nan
     """
-    if pd.isna(value):
-        return np.nan
+    if isinstance(value, np.ndarray):
+        value = value.tolist()
+
+    if isinstance(value, tuple):
+        value = list(value)
 
     if isinstance(value, list):
         return clean_list_items(value)
 
+    if value is None:
+        return np.nan
+
+    if isinstance(value, float) and pd.isna(value):
+        return np.nan
+
     if isinstance(value, str):
         list_value = value.strip()
+
         if not list_value:
             return np.nan
 
         if not (list_value.startswith("[") and list_value.endswith("]")):
             string_to_list = list_value.split(",")
             return clean_list_items(string_to_list)
+
         try:
             parsed_value = ast.literal_eval(list_value)
+
+            if isinstance(parsed_value, np.ndarray):
+                parsed_value = parsed_value.tolist()
+
+            if isinstance(parsed_value, tuple):
+                parsed_value = list(parsed_value)
+
             if isinstance(parsed_value, list):
                 return clean_list_items(parsed_value)
+
             return value
+
         except (ValueError, SyntaxError):
             try:
                 fixed_list_value = re.sub(
@@ -160,11 +189,21 @@ def normalize_list_like_value(value):
                     list_value
                 )
                 parsed_fixed_value = ast.literal_eval(fixed_list_value)
+
+                if isinstance(parsed_fixed_value, np.ndarray):
+                    parsed_fixed_value = parsed_fixed_value.tolist()
+
+                if isinstance(parsed_fixed_value, tuple):
+                    parsed_fixed_value = list(parsed_fixed_value)
+
                 if isinstance(parsed_fixed_value, list):
                     return clean_list_items(parsed_fixed_value)
+
                 return value
+
             except (ValueError, SyntaxError):
                 return value if value else np.nan
+
     return value
 
 

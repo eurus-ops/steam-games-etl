@@ -7,7 +7,7 @@ from pprint import pprint
 def main():
     try:
         logger.info("Pipeline started")
-        input_file_path = config.RAW_CSV_FILE_PATH
+        input_file_path = config.RAW_JSON_FILE_PATH
         logger.info(f"Input file selected: {input_file_path}")
 
         raw_games_dataframe, file_type = extract.read_raw_games_file(
