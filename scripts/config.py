@@ -168,6 +168,10 @@ LOOKUP_MAPPING = {
     "genres": "genre_name",
 }
 
+MANUAL_LANGUAGE_FIXES = {
+    "English Dutch  English": ["English", "Dutch", "English"],
+}
+
 LANGUAGE_LOOKUP_SOURCE_COLUMNS = [
     "supported_languages",
     "full_audio_languages",

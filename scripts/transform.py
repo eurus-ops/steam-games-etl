@@ -257,30 +257,33 @@ def clean_language_item(language):
     Clean one raw language value.
 
     Purpose:
-        Takes one language item and removes messy formatting/noise such as:
+        Takes one raw language item and removes messy formatting/noise such as:
         - HTML entities like &amp;lt;strong&amp;gt;
         - BBCode tags like [b][/b]
         - HTML tags like <strong>, <br />
-        - the text marker "(full audio)"
-        - extra spaces and repeated line breaks
+        - placeholder tokens like #lang_slovakian
+        - parenthesized notes like (full audio), (text only),
+          (all with full audio support)
+        - trailing punctuation like ; or ,
+
+        This function also normalizes line breaks and trims spaces on each line,
+        while intentionally preserving line breaks so that later logic can still
+        split merged multi-language strings correctly.
 
     Important:
-        This function cleans only ONE item.
-        It does not split a combined string into multiple languages.
-        That job belongs to split_cleaned_language_text().
+        This function cleans only ONE raw item.
+        It does not fully solve badly merged language strings with no separators.
+        It also does not return a list by itself — it returns one cleaned string
+        or np.nan.
 
     Parameters:
         language (Any):
-            One raw language value, usually a string like:
-            "English[b][/b]"
-            "English (full audio)"
-            "English&amp;lt;strong&amp;gt;&amp;lt;/strong&amp;gt;"
-            or a missing value like np.nan / None
+            One raw language value, usually a string from a language column.
 
     Returns:
         str | np.nan:
-            - Cleaned language text as a string
-            - np.nan if the value is empty or missing
+            - A cleaned language string
+            - np.nan if the value is empty, missing, or unusable
 
     Example:
         Input:
@@ -289,19 +292,42 @@ def clean_language_item(language):
             "English"
 
         Input:
-            "English (full audio)"
-        Output:
-            "English"
-
-        Input:
-            "Japanese &amp;lt;br /&amp;gt;&amp;lt;br /&amp;gt;&amp;lt;strong&amp;gt;&amp;lt;/strong&amp;gt;"
+            "Japanese (all with full audio support)"
         Output:
             "Japanese"
 
         Input:
-            np.nan
+            "#lang_slovakian"
         Output:
             np.nan
+
+        Input:
+            "German;"
+        Output:
+            "German"
+
+        Input:
+            "Russian\\r\\nEnglish\\r\\nFrench"
+        Output:
+            "Russian\\nEnglish\\nFrench"
+
+    Visualization:
+        Raw single item:
+            "English[b][/b]"
+
+        After cleaning:
+            "English"
+
+        Raw single item with multiple languages joined by line breaks:
+            "Russian\\r\\nEnglish\\r\\nFrench"
+
+        After cleaning:
+            "Russian\\nEnglish\\nFrench"
+
+        Notice:
+            The line breaks are kept on purpose so another function can split them
+            into:
+                ["Russian", "English", "French"]
     """
     if isinstance(language, list):
         return np.nan
@@ -323,19 +349,31 @@ def clean_language_item(language):
         previous_text = text
         text = html.unescape(text)
 
+    # Drop placeholder-like tokens such as #lang_slovakian
+    if text.lower().startswith("#lang_"):
+        return np.nan
+
     # Remove BBCode and HTML tags
     text = re.sub(r"\[/?b\]", "", text, flags=re.IGNORECASE)
     text = re.sub(r"<br\s*/?>", "\n", text, flags=re.IGNORECASE)
     text = re.sub(r"</?strong>", "", text, flags=re.IGNORECASE)
     text = re.sub(r"<[^>]+>", "", text)
 
-    # Remove "(full audio)" marker
-    text = re.sub(r"\(full audio\)", "", text, flags=re.IGNORECASE)
-
-    # Normalize line breaks and spaces
+    # Normalize CRLF
     text = text.replace("\r", "\n")
+
+    # Remove parenthesized notes
+    text = re.sub(r"\s*\((?:[^)]*)\)\s*", "", text, flags=re.IGNORECASE)
+
+    # Collapse repeated blank lines, but KEEP line breaks
     text = re.sub(r"\n+", "\n", text)
-    text = re.sub(r"\s+", " ", text).strip()
+
+    # Strip spaces on each line without flattening everything into one line
+    text = "\n".join(part.strip() for part in text.split("\n"))
+    text = text.strip()
+
+    # Remove trailing punctuation left behind by dirty source values
+    text = re.sub(r"[;,]+$", "", text).strip()
 
     if not text:
         return np.nan
@@ -348,16 +386,14 @@ def split_cleaned_language_text(text):
     Split one cleaned language string into multiple language items if needed.
 
     Purpose:
-        Takes a cleaned string and checks if it actually contains multiple
-        languages joined together by line breaks.
+        Takes a cleaned string and checks whether it still contains multiple
+        languages joined by separators such as:
+        - line breaks
+        - commas
+        - semicolons
 
-        Example:
-            "English\\nRussian\\nSpanish - Spain"
-        should become:
-            ["English", "Russian", "Spanish - Spain"]
-
-        If there are no line breaks, this function keeps the value as
-        a one-item list.
+        It also allows targeted manual fixes for known dirty values that lost
+        their separators.
 
     Parameters:
         text (Any):
@@ -365,8 +401,7 @@ def split_cleaned_language_text(text):
 
     Returns:
         list[str] | np.nan:
-            - A list of one or more cleaned language values
-            - np.nan if the value is empty or missing
+            A list of one or more cleaned language values, or np.nan.
 
     Example:
         Input:
@@ -375,14 +410,19 @@ def split_cleaned_language_text(text):
             ["English", "Russian", "Spanish - Spain"]
 
         Input:
+            "Hungarian,Polish"
+        Output:
+            ["Hungarian", "Polish"]
+
+        Input:
+            "English Dutch English"
+        Output:
+            ["English", "Dutch", "English"]
+
+        Input:
             "English"
         Output:
             ["English"]
-
-        Input:
-            np.nan
-        Output:
-            np.nan
     """
     if text is None:
         return np.nan
@@ -395,10 +435,16 @@ def split_cleaned_language_text(text):
     if not text:
         return np.nan
 
-    # Split by line breaks if present
-    if "\n" in text:
-        parts = [part.strip() for part in text.split("\n") if part.strip()]
-        return parts if parts else np.nan
+    # Split by newline, comma, or semicolon
+    parts = re.split(r"[\n,;]+", text)
+    parts = [part.strip() for part in parts if part.strip()]
+
+    if len(parts) > 1:
+        return parts
+
+    # Manual fix for known bad merged values
+    if text in config.MANUAL_LANGUAGE_FIXES:
+        return config.MANUAL_LANGUAGE_FIXES[text]
 
     # Otherwise keep as one item
     return [text]
