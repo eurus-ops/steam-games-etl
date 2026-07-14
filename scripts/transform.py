@@ -42,6 +42,64 @@ def remove_empty_strings_and_lists(selected_cols_dataframe):
     return selected_columns_dataframe
 
 
+def log_and_fill_missing_game_names(dataframe):
+    """
+    Find rows with a missing game_name and fill them with a placeholder.
+
+    Purpose:
+        Some source rows have no game_name after remove_empty_strings_and_lists()
+        converts blank values to np.nan. For example, game_id 396420 is a real
+        Steam game ("Spookening", released 2016) that ships with a blank name
+        in the default locale.
+
+        The steam_games table defines game_name as NOT NULL, so these rows
+        can't reach the database with a missing name. Rather than silently
+        dropping real game records, this function fills the gap with a
+        placeholder that still identifies the game by its game_id, and logs
+        a warning so the affected rows stay visible.
+
+    Parameters:
+        dataframe (pd.DataFrame):
+            The dataframe after remove_empty_strings_and_lists() has run,
+            containing at least "game_id" and "game_name" columns.
+
+    Returns:
+        pd.DataFrame:
+            A copy of the dataframe where any row with a missing game_name
+            now has a "[UNNAMED - game_id <id>]" placeholder instead of np.nan.
+
+    Example:
+        Input dataframe:
+            game_id    game_name
+            ---------------------
+            396420     np.nan
+            730        "Counter-Strike 2"
+
+        Output dataframe:
+            game_id    game_name
+            ------------------------------------
+            396420     "[UNNAMED - game_id 396420]"
+            730        "Counter-Strike 2"
+    """
+    filled_dataframe = dataframe.copy()
+
+    missing_mask = filled_dataframe["game_name"].isna()
+    missing_game_ids = filled_dataframe.loc[missing_mask, "game_id"].tolist()
+
+    if missing_game_ids:
+        logger.warning(
+            "Found %d games with missing game_name. game_ids: %s",
+            len(missing_game_ids),
+            missing_game_ids,
+        )
+
+    filled_dataframe.loc[missing_mask, "game_name"] = filled_dataframe.loc[
+        missing_mask, "game_id"
+    ].apply(lambda game_id: f"[UNNAMED - game_id {game_id}]")
+
+    return filled_dataframe
+
+
 def clean_list_items(items):
     """
     Clean the contents of an existing Python list.

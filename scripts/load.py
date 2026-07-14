@@ -30,15 +30,46 @@ def make_engine(db_url):
     return engine
 
 
+def nan_to_none(dataframe):
+    """
+    Convert all missing values (np.nan, NaT, None) to None for SQL insertion.
+
+    Purpose:
+        pandas uses np.nan as its missing-value marker, but psycopg cannot
+        convert float('nan') to SQL NULL — it lands in the database as a
+        literal 'NaN' string in text columns. Only Python None becomes a
+        proper SQL NULL. This is the single translation point at the
+        DataFrame → database boundary.
+
+    Why both steps (order matters):
+        .astype(object)
+            Numeric dtypes (float64) cannot hold None — pandas silently
+            converts None back to NaN. Casting to object dtype first
+            allows columns to hold None. Does NOT change any values.
+        .where(pd.notnull(dataframe), None)
+            Keeps values where not-null, substitutes None where null.
+            This is the actual NaN → None swap.
+
+    Do NOT call this earlier in the pipeline — transform functions
+    depend on np.nan (dropna, isna, coerce), and object dtype is slow.
+    Only use at the final hop before .to_dict(orient="records").
+
+    Example:
+        Input:   price: [1.99, NaN],  url: [NaN, "steam.com"]
+        Output:  price: [1.99, None], url: [None, "steam.com"]
+    """
+    return dataframe.astype(object).where(pd.notnull(dataframe), None)
+
+
 def convert_dataframe_to_records(data):
     if isinstance(data, pd.DataFrame):
         logger.info("Dataframe converted to records")
-        return data.to_dict(orient="records")
+        return nan_to_none(data).to_dict(orient="records")
 
     if isinstance(data, dict):
         records_dict = {}
         for name, dataframe in data.items():
-            records_dict[name] = dataframe.to_dict(orient="records")
+            records_dict[name] = nan_to_none(dataframe).to_dict(orient="records")
         logger.info("Dataframes dictionary converted to records")
         return records_dict
 

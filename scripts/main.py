@@ -30,8 +30,12 @@ def main():
             selected_cols_dataframe=selected_columns_dataframe
         )
 
+        filled_game_names_dataframe = transform.log_and_fill_missing_game_names(
+            dataframe=cleaned_columns_dataframe
+        )
+
         normalized_columns_dataframe = transform.normalize_list_like_columns(
-            cleaned_cols_dataframe=cleaned_columns_dataframe,
+            cleaned_cols_dataframe=filled_game_names_dataframe,
             list_like_column_names=config.LIST_LIKE_COLUMN_NAMES
         )
 
