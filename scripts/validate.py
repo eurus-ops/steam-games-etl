@@ -41,5 +41,13 @@ def validate_csv_columns(raw_csv_file_path, expected_column_count):
         header_row = next(csv_reader, None)
         first_data_row = next(csv_reader, None)
 
+    if header_row is None:
+        logger.error("Raw CSV file is empty: %s", raw_csv_file_path)
+        raise ValueError(f"Raw CSV file is empty: {raw_csv_file_path}")
+
+    if first_data_row is None:
+        logger.error("Raw CSV file has a header but no data rows: %s", raw_csv_file_path)
+        raise ValueError(f"Raw CSV file has no data rows: {raw_csv_file_path}")
+
     return None
 
