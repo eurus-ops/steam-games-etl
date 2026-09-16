@@ -35,7 +35,9 @@ def check_duplicates_and_nulls(dataframe):
     dataframe.info()
 
 
-def validate_csv_columns(raw_csv_file_path, expected_column_count):
+def validate_csv_columns(raw_csv_file_path, expected_column_names):
+    expected_column_count = len(expected_column_names)
+
     with open(raw_csv_file_path, "r", encoding="utf-8", newline="") as csv_file:
         csv_reader = csv.reader(csv_file)
         header_row = next(csv_reader, None)
@@ -49,5 +51,38 @@ def validate_csv_columns(raw_csv_file_path, expected_column_count):
         logger.error("Raw CSV file has a header but no data rows: %s", raw_csv_file_path)
         raise ValueError(f"Raw CSV file has no data rows: {raw_csv_file_path}")
 
-    return None
+    header_column_count = len(header_row)
+    data_column_count = len(first_data_row)
+
+    if header_column_count != expected_column_count:
+        logger.info(
+            "Raw CSV header has %d fields, expected %d. "
+            "This is the known malformed header and does not affect the data.",
+            header_column_count,
+            expected_column_count,
+        )
+    else:
+        logger.info(
+            "Raw CSV header now has %d fields and appears to have been fixed "
+            "upstream. No action needed, but the source file has changed.",
+            header_column_count,
+        )
+
+    if data_column_count != expected_column_count:
+        logger.error(
+            "Raw CSV column count mismatch: data rows have %d fields but %d "
+            "column names are configured. Applying the configured names would "
+            "misalign every column. Update CORRECT_COLUMNS_NAMES in config.py "
+            "to match the current source file.",
+            data_column_count,
+            expected_column_count,
+        )
+        raise ValueError(
+            f"Raw CSV column count mismatch: expected {expected_column_count} "
+            f"columns, found {data_column_count}"
+        )
+
+    logger.info("CSV column count validated: %d columns", data_column_count)
+
+    return data_column_count
 

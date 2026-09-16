@@ -1,3 +1,5 @@
+import validate
+
 import json
 from pathlib import Path
 
@@ -5,6 +7,7 @@ import pandas as pd
 from pandas.errors import ParserError
 
 from logger_config import logger
+
 
 
 def read_raw_games_file(raw_file_path, correct_column_names=None):
@@ -23,12 +26,18 @@ def read_raw_games_file(raw_file_path, correct_column_names=None):
 
 def read_raw_games_csv(raw_file_path, correct_column_names):
     try:
+        validate.validate_csv_columns(
+            raw_csv_file_path=raw_file_path,
+            expected_column_names=correct_column_names
+        )
+
         raw_games_dataframe = pd.read_csv(
             raw_file_path,
             header=0,
             names=correct_column_names,
             index_col=False
         )
+
         logger.info("File read success")
         return raw_games_dataframe, "csv"
     except FileNotFoundError as exc:
