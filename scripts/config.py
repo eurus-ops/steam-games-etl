@@ -42,6 +42,8 @@ CORRECT_COLUMNS_NAMES = [
     "Genres", "Tags", "Screenshots", "Movies"
 ]
 
+RAW_CSV_EXPECTED_HEADER_COUNT = 39
+
 JSON_TO_CSV_RENAME = {
     "name": "Name",
     "release_date": "Release date",

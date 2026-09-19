@@ -10,12 +10,12 @@ from logger_config import logger
 
 
 
-def read_raw_games_file(raw_file_path, correct_column_names=None):
+def read_raw_games_file(raw_file_path, correct_column_names=None, expected_header_count=None):
     file_suffix = Path(raw_file_path).suffix.lower()
 
     if file_suffix == ".csv":
         logger.info("Detected CSV file")
-        return read_raw_games_csv(raw_file_path, correct_column_names)
+        return read_raw_games_csv(raw_file_path, correct_column_names, expected_header_count)
     elif file_suffix == ".json":
         logger.info("Detected JSON file")
         return read_raw_games_json(raw_file_path)
@@ -24,11 +24,12 @@ def read_raw_games_file(raw_file_path, correct_column_names=None):
         raise ValueError(f"Unsupported file format: {file_suffix}")
 
 
-def read_raw_games_csv(raw_file_path, correct_column_names):
+def read_raw_games_csv(raw_file_path, correct_column_names, expected_header_count):
     try:
         validate.validate_csv_columns(
             raw_csv_file_path=raw_file_path,
-            expected_column_names=correct_column_names
+            expected_column_names=correct_column_names,
+            raw_csv_expected_header_count=expected_header_count
         )
 
         raw_games_dataframe = pd.read_csv(

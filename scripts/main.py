@@ -12,7 +12,8 @@ def main():
 
         raw_games_dataframe, file_type = extract.read_raw_games_file(
             input_file_path,
-            correct_column_names=config.CORRECT_COLUMNS_NAMES
+            correct_column_names=config.CORRECT_COLUMNS_NAMES,
+            expected_header_count=config.RAW_CSV_EXPECTED_HEADER_COUNT,
         )
         logger.info("Extraction completed")
 
