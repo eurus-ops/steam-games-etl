@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Database connection (credentials come from .env)
 DB_CONFIG = {
     "host": os.getenv("DB_HOST"),
     "dbname": os.getenv("DB_NAME"),
@@ -15,26 +16,32 @@ DB_CONFIG = {
 
 DB_DRIVER_NAME = "postgresql+psycopg2"
 
+# Project directories
 PROJECT_ROOT_PATH = Path(__file__).resolve().parent.parent
 RAW_DATA_DIR = PROJECT_ROOT_PATH / "data" / "raw"
 CLEANED_DATA_DIR = PROJECT_ROOT_PATH / "data" / "cleaned"
 METADATA_DIR = PROJECT_ROOT_PATH / "data" / "metadata"
 
+# Input, output and baseline files
 RAW_CSV_FILE_PATH = RAW_DATA_DIR / "games.csv"
 RAW_JSON_FILE_PATH = RAW_DATA_DIR / "games.json"
 CLEANED_CSV_FILE_PATH = CLEANED_DATA_DIR / "steam_games_cleaned.csv"
 SAVED_HEADER_FILE_PATH = METADATA_DIR / "last_header.csv"
 LAST_ROW_COUNT_FILE_PATH = METADATA_DIR / "last_row_count.txt"
 
+# Gate 1: largest row count drop allowed between runs
 MAX_ROW_COUNT_DROP_PERCENT = 5
 
+# Logging
 LOGS_DIR = PROJECT_ROOT_PATH / "logs"
 LOG_FILE_PATH = LOGS_DIR / "etl_pipeline.log"
 
+# Main table name and keys
 TABLE_NAME = "steam_games"
 MAIN_TABLE_UNIQUE_KEY = "game_id"
 LOOKUP_TABLE_UNIQUE_KEY = "id"
 
+# Gate 2: release date bounds, NaN limits and value ranges
 MIN_RELEASE_DATE = "1997-01-01"
 MAX_RELEASE_DATE_YEARS_AHEAD = 2
 
@@ -53,6 +60,7 @@ VALUE_RANGE_RULES = {
     "achievements":     (0, None),
 }
 
+# Raw CSV layout: column names applied by position, and the known malformed header width
 CORRECT_COLUMNS_NAMES = [
     "AppID", "Name", "Release date", "Estimated owners",
     "Peak CCU", "Required age", "Price", "Discount",
@@ -68,6 +76,7 @@ CORRECT_COLUMNS_NAMES = [
 
 RAW_CSV_EXPECTED_HEADER_COUNT = 39
 
+# Column renaming: JSON names to CSV names, then CSV names to database names
 JSON_TO_CSV_RENAME = {
     "name": "Name",
     "release_date": "Release date",
@@ -131,6 +140,7 @@ COLUMN_RENAME_MAPPING = {
     "Genres": "genres"
 }
 
+# Transform: columns to keep and how each kind is cleaned
 SELECTED_COLUMNS = [
     "game_id", "game_name", "release_date", "estimated_owners",
     "peak_ccu", "required_age", "price", "discount",
@@ -160,6 +170,7 @@ NUMERIC_COLUMN_NAMES = [
 
 DATE_COLUMN_NAME = "release_date"
 
+# Main table columns
 STEAM_GAMES_COLUMNS = [
     "game_id",
     "game_name",
@@ -187,6 +198,7 @@ STEAM_GAMES_COLUMNS = [
     "median_playtime_2weeks"
 ]
 
+# Lookup tables and language cleaning
 LOOKUP_MAPPING = {
     "developers": "developer_name",
     "publishers": "publisher_name",
@@ -205,6 +217,7 @@ LANGUAGE_LOOKUP_SOURCE_COLUMNS = [
 
 LANGUAGE_LOOKUP_OUTPUT_COLUMN = "language_name"
 
+# Bridge tables
 BRIDGE_MAPPING = {
     "supported_languages": "language_name",
     "full_audio_languages": "language_name",
@@ -263,6 +276,7 @@ BRIDGE_TABLES_CONFIG = {
     }
 }
 
+# Load: columns and conflict key for each upsert
 TABLES_AND_COLUMNS_MAPPING = {
     TABLE_NAME: STEAM_GAMES_COLUMNS,
     "languages": ["language_name"],

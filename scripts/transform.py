@@ -1,3 +1,5 @@
+"""Cleans the raw games data and splits it into the main, lookup and bridge tables."""
+
 import numpy as np
 import pandas as pd
 import config
@@ -9,6 +11,10 @@ from logger_config import logger
 
 
 def rename_columns(raw_dataframe, source_file):
+    """Entry point.
+    Renames JSON columns to the CSV names first, so both sources share one rename mapping and reach
+    the rest of transform with identical column names.
+    """
     if source_file == "csv":
         renamed_columns_dataframe = raw_dataframe.rename(
             columns=config.COLUMN_RENAME_MAPPING
@@ -30,12 +36,20 @@ def rename_columns(raw_dataframe, source_file):
 
 
 def select_columns(raw_dataframe, selected_cols):
+    """Entry point.
+    Drops the source columns the database has no place for, so later steps only process data that
+    will actually be loaded.
+    """
     selected_columns_dataframe = raw_dataframe[selected_cols]
     logger.info("Columns selected")
     return selected_columns_dataframe
 
 
 def remove_empty_strings_and_lists(selected_cols_dataframe):
+    """Entry point.
+    Turns blank values into NaN, so every later step has one marker for missing data instead of
+    having to check for both NaN and empty strings.
+    """
     selected_columns_dataframe = selected_cols_dataframe.replace("", np.nan)
     selected_columns_dataframe = selected_columns_dataframe.replace([], np.nan)
     logger.info("Empty values normalized")
@@ -662,6 +676,10 @@ def clean_language_columns(dataframe, language_column_names):
 
 
 def convert_column_types(normalized_cols_dataframe, numeric_columns, date_column):
+    """Entry point.
+    Uses errors="coerce" so one unparseable value becomes NaN instead of crashing the run. If a format
+    change coerces most of a critical column to NaN, Gate 2's NaN check catches it.
+    """
     for column in numeric_columns:
         normalized_cols_dataframe[column] = pd.to_numeric(normalized_cols_dataframe[column], errors="coerce")
 
@@ -671,6 +689,10 @@ def convert_column_types(normalized_cols_dataframe, numeric_columns, date_column
 
 
 def split_estimated_owners(value):
+    """Helper.
+    Splits a text range like "20000 - 50000" into two numbers. Anything that does not match that
+    shape becomes NaN rather than stopping the run.
+    """
     if pd.isna(value):
         return pd.Series([np.nan, np.nan])
 
@@ -697,6 +719,10 @@ def split_estimated_owners(value):
 
 
 def add_estimated_owners_columns(converted_cols_dataframe):
+    """Entry point.
+    Adds numeric min and max owner columns because the source only gives owners as a text range,
+    which cannot be filtered, summed or compared.
+    """
     split_column_dataframe = converted_cols_dataframe.copy()
 
     logger.info("Started splitting estimated_owners columns")
@@ -711,6 +737,10 @@ def add_estimated_owners_columns(converted_cols_dataframe):
 
 
 def build_lookup_dataframe(dataframe, source_column, output_column):
+    """Helper.
+    Builds one row per distinct name. The drop_duplicates is needed because .explode() creates
+    duplicates by design: one genre appears once per game that has it.
+    """
     copy_dataframe = dataframe[[source_column]].copy()
 
     explode_df = copy_dataframe.explode(source_column)
@@ -724,6 +754,10 @@ def build_lookup_dataframe(dataframe, source_column, output_column):
 
 
 def build_bridge_dataframe(dataframe, source_column, output_column):
+    """Helper.
+    Builds one row per game-and-name pair. The drop_duplicates removes repeated pairs, for example a
+    game that lists the same developer twice, because the bridge table allows each pair only once.
+    """
     copy_dataframe = dataframe[[config.MAIN_TABLE_UNIQUE_KEY, source_column]].copy()
 
     explode_df = copy_dataframe.explode(source_column)
@@ -740,6 +774,10 @@ def build_bridge_dataframe(dataframe, source_column, output_column):
 
 
 def build_combined_lookup_dataframe(dataframe, source_columns, output_column):
+    """Helper.
+    Merges supported and full-audio languages into one languages table, so a language that appears
+    in both columns gets one ID instead of two.
+    """
     lookup_frames = []
 
     for source_column in source_columns:
@@ -754,6 +792,10 @@ def build_combined_lookup_dataframe(dataframe, source_columns, output_column):
 
 
 def build_separate_dataframes(split_col_dataframe, lookup_mapping, bridge_mapping):
+    """Entry point.
+    Splits the one wide DataFrame into the main table plus lookup and bridge tables, matching the
+    normalized schema so each developer, genre and language is stored once.
+    """
     lookup_dataframes = {}
     bridge_dataframes = {}
     copy_dataframe = split_col_dataframe.copy()

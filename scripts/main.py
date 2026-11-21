@@ -1,9 +1,15 @@
+"""Runs the full ETL pipeline in order: extract, transform, validate, load."""
+
 import config, validate, extract, transform, load
 import sys
 from logger_config import logger
 
 
 def main():
+    """Entry point.
+    Exits with code 1 on any failure, so a scheduler or shell script can tell the run failed instead
+    of seeing a normal exit.
+    """
     try:
         logger.info("Pipeline started")
         input_file_path = config.RAW_CSV_FILE_PATH
