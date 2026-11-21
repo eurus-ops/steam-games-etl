@@ -2,7 +2,7 @@
 
 This project builds an ETL pipeline for a Steam games dataset from Kaggle, loads cleaned and standardized data into a PostgreSQL database, and reports on it through a Power BI dashboard.
 
-The pipeline supports **CSV and JSON** input formats, applies data cleaning and schema standardization, and loads the data into a **normalized PostgreSQL schema** using upsert logic for the main and lookup tables plus bridge-table loading for many-to-many relationships. A separate **star schema semantic model** sits on top of that database in Power BI for reporting.
+The pipeline supports **CSV and JSON** input formats, applies data cleaning and schema standardization, validates the data at two stages, and loads it into a **normalized PostgreSQL schema** using upsert logic for the main and lookup tables plus bridge-table loading for many-to-many relationships. A separate **star schema semantic model** sits on top of that database in Power BI for reporting.
 
 Source:  
 https://www.kaggle.com/datasets/fronkongames/steam-games-dataset/data
@@ -18,6 +18,7 @@ The goal of this project is to practice and demonstrate core data engineering an
 - normalizing one large flat dataset into relational tables
 - loading cleaned data into PostgreSQL using **upsert** logic
 - loading many-to-many bridge tables for repeated/list-like attributes
+- validating the source file and the transformed data before anything is written
 - validating the loaded data with SQL
 - modeling the same data as a **star schema** for analytical reporting
 - improving maintainability with modular pipeline components and environment-based configuration
@@ -36,21 +37,25 @@ The goal of this project is to practice and demonstrate core data engineering an
 
 ## Current Pipeline Version
 
-### V3 — Normalized Schema
+### V5 — Data Quality and Validation
 
-The pipeline now loads data into a normalized relational design instead of a single flat table.
+The pipeline checks the source file and the transformed data before writing anything to PostgreSQL. The Kaggle dataset is actively maintained, so every refresh can bring both new data and changes to the file itself.
 
-### Main table
+### Database Schema
+
+Data is loaded into a normalized relational design rather than a single flat table.
+
+**Main table**
 - `steam_games`
 
-### Lookup tables
+**Lookup tables**
 - `languages`
 - `developers`
 - `publishers`
 - `categories`
 - `genres`
 
-### Bridge tables
+**Bridge tables**
 - `game_supported_languages`
 - `game_full_audio_languages`
 - `game_developers`
@@ -66,8 +71,11 @@ The pipeline now loads data into a normalized relational design instead of a sin
 - Modular ETL workflow:
   - extract
   - transform
-  - load
   - validate
+  - load
+- Two-stage validation:
+  - structural checks on the raw file
+  - content checks on the transformed data
 - JSON-to-tabular transformation aligned with the CSV pipeline structure
 - Data cleaning for:
   - empty strings
@@ -91,19 +99,19 @@ The pipeline now loads data into a normalized relational design instead of a sin
 - Environment-based database credentials using `.env`
 - Console and file logging for pipeline monitoring and debugging
 
-## Data Modeling Improvements in V3
+## Data Modeling
 
-Compared to the earlier flat-table design, V3 improves the schema by:
+Compared to a flat-table design, the normalized schema:
 
-- splitting one large table into multiple related tables
-- reducing repeated text values
-- properly modeling many-to-many relationships
-- separating list-like attributes into lookup and bridge tables
-- making the database easier to query and maintain
+- splits one large table into multiple related tables
+- reduces repeated text values
+- properly models many-to-many relationships
+- separates list-like attributes into lookup and bridge tables
+- makes the database easier to query and maintain
 
 ## Example Transform Flow
 
-The transform step now includes:
+The transform step includes:
 
 1. rename source columns
 2. select required columns
@@ -120,13 +128,60 @@ The transform step now includes:
 
 ## Load Flow
 
-The load step now works in three stages:
+The load step works in three stages:
 
 1. upsert the `steam_games` table
 2. upsert lookup tables
 3. load bridge tables by mapping lookup values to lookup IDs
 
 Missing values are converted from `np.nan` to `None` at the DataFrame-to-records boundary so they land in PostgreSQL as real SQL `NULL`s rather than as `'NaN'` strings.
+
+## Validation
+
+The pipeline runs two gates. Both exist because the failures they catch are silent — the run completes, the log looks clean, and the data is wrong.
+
+### Gate 1 — the raw file
+
+Runs in `extract.py`, around `pd.read_csv`, so a bad file is rejected before a database connection is ever opened.
+
+The source CSV ships with a malformed header: one missing comma fuses `Discount` and `DLC count` into a single field, giving 39 header fields against 40 data fields. The pipeline compensates by discarding the header entirely and applying a hardcoded column list positionally.
+
+That makes an upstream header fix harmless — the header is never used. The real risk is a change to the **data**: a column added, removed, or reordered. The field count would still look plausible, nothing would error, and the positional override would stamp the wrong name on every column from the first moved one onward.
+
+| Check | On failure |
+|---|---|
+| Data field count matches the configured column list | raises |
+| Header field count is still the known-malformed 39 | warns |
+| Header column names match the previous run | raises |
+| Header column order matches the previous run | raises |
+| Row count has not dropped past a configured tolerance | raises |
+
+The last three compare against small baseline files in `data/metadata/`, written at the end of each successful run.
+
+A failed check deliberately does **not** update its baseline. Updating it would mean the next run compares the new bad value against itself, finds no difference, and passes — the check would fire once and then go permanently blind. Recovery is manual: read the error, confirm the change is expected, delete the baseline file, rerun.
+
+The row count tolerance exists because the dataset legitimately shrinks. Steam delists games constantly and the dataset is scraped, so small drops are normal churn. A large drop means a truncated download — and because the load is upsert-only and never deletes, a short file would leave the missing rows stale in the database rather than removing them.
+
+### Gate 2 — the transformed data
+
+Runs after type conversion, before anything reaches `load.py`.
+
+| Check | On failure |
+|---|---|
+| Every row has a `game_id` | raises |
+| Watched columns are not mostly NaN after type conversion | raises |
+| Values are within possible ranges | warns |
+| No duplicate `game_id` rows | raises |
+
+**The NaN check** is the one that justifies the gate. If the source changes price from `19.99` to `$19.99`, `pd.to_numeric(errors="coerce")` turns all 125,000 prices into NaN without a word. They load as `NULL`, the run reports success, and the dashboard silently goes blank.
+
+The limit applies to three named columns — `game_name`, `price`, `release_date` — rather than to all of them, because most columns in this dataset are legitimately mostly empty. `metacritic_url` is 96% NaN on a perfectly healthy run. A blanket rule would fire every time on columns that are fine, and a check that cries wolf gets ignored. Every other column is still counted and logged; only the watched three can stop the run.
+
+**The range checks warn rather than raise**, because out-of-range values are usually source noise rather than corruption, and the same decision was already made for the nameless game: surface it, log the affected `game_id`s, keep the data.
+
+One of them is worth calling out. `DimDate` in the Power BI model is generated with `CALENDARAUTO()`, which builds its range from the earliest and latest dates in the model — the extremes, not the bulk. A single placeholder release date of `9999-12-31` stretches the date table across thousands of empty days, fills the date hierarchy with blank years, and breaks the `Is Complete Year` flag, which measures against `MAX(FactGames[release_date])`. Type conversion cannot catch it: a placeholder date parses perfectly. It is valid and wrong.
+
+**Duplicate `game_id` raises** rather than being quietly removed. `drop_duplicates(keep="first")` would arbitrarily pick whichever copy appeared first in the file and discard the other, silently. Lookup and bridge tables are not checked — both go through builder functions that already call `drop_duplicates`, and `.duplicated()` uses the same exact-string comparison, so it could only find what was already removed.
 
 ## Data Quality Handling
 
@@ -198,7 +253,10 @@ steam_games_etl/
 │   ├── raw/
 │   │   ├── games.csv
 │   │   └── games.json
-│   └── cleaned/
+│   ├── cleaned/
+│   └── metadata/
+│       ├── last_header.csv
+│       └── last_row_count.txt
 ├── images/
 │   ├── Catalog.png
 │   └── Reception.png

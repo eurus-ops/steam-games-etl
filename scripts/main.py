@@ -1,7 +1,6 @@
-import config, extract, transform, validate, load
+import config, validate, extract, transform, load
+import sys
 from logger_config import logger
-
-from pprint import pprint
 
 
 def main():
@@ -12,7 +11,11 @@ def main():
 
         raw_games_dataframe, file_type = extract.read_raw_games_file(
             input_file_path,
-            correct_column_names=config.CORRECT_COLUMNS_NAMES
+            last_row_count_file_path=config.LAST_ROW_COUNT_FILE_PATH,
+            max_drop_percent=config.MAX_ROW_COUNT_DROP_PERCENT,
+            correct_column_names=config.CORRECT_COLUMNS_NAMES,
+            expected_header_count=config.RAW_CSV_EXPECTED_HEADER_COUNT,
+            saved_header_file_path=config.SAVED_HEADER_FILE_PATH
         )
         logger.info("Extraction completed")
 
@@ -62,6 +65,15 @@ def main():
 
         logger.info("Transform completed")
 
+        validate.validate_transformed_data(
+            steam_games_dataframe=steam_games_df,
+            main_table_unique_key=config.MAIN_TABLE_UNIQUE_KEY,
+            min_release_date=config.MIN_RELEASE_DATE,
+            max_date_years_ahead=config.MAX_RELEASE_DATE_YEARS_AHEAD,
+            critical_nan_columns=config.CRITICAL_NAN_COLUMNS,
+            value_range_rules=config.VALUE_RANGE_RULES,
+        )
+
         steam_games_records = load.convert_dataframe_to_records(steam_games_df)
         lookup_records = load.convert_dataframe_to_records(lookup_dfs)
 
@@ -89,7 +101,7 @@ def main():
         logger.info("Upsert completed")
     except Exception:
         logger.exception("Pipeline failed")
-        raise
+        sys.exit(1)
 
 
 if __name__ == "__main__":
