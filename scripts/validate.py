@@ -1,3 +1,5 @@
+"""Checks the raw file and the transformed data, and stops the run before bad data is loaded."""
+
 import csv
 import pandas as pd
 from pathlib import Path
@@ -6,6 +8,9 @@ from logger_config import logger
 
 
 def inspect_dataframe(dataframe):
+    """Helper.
+    Prints a quick overview of a DataFrame for manual debugging. The pipeline does not call it.
+    """
     print("Shape:")
     print(dataframe.shape)
 
@@ -23,6 +28,10 @@ def inspect_dataframe(dataframe):
 
 
 def check_duplicates_and_nulls(dataframe):
+    """Helper.
+    Prints duplicate game_id and null counts for manual debugging. The pipeline does not call it;
+    check_duplicates and check_nan_counts are the automated versions.
+    """
     game_id_duplicate_count = dataframe.duplicated(subset="game_id").sum()
     null_column_counts = dataframe.isnull().sum()
 
@@ -37,6 +46,10 @@ def check_duplicates_and_nulls(dataframe):
 
 
 def validate_csv_columns(raw_csv_file_path, expected_column_names, raw_csv_expected_header_count):
+    """Entry point.
+    Stops the run if data rows no longer have one field per configured column name, which would make
+    the names land on the wrong data. Reads only two lines, so it is cheap to run first.
+    """
     expected_column_count = len(expected_column_names)
 
     with open(raw_csv_file_path, "r", encoding="utf-8", newline="") as csv_file:
@@ -90,6 +103,9 @@ def validate_csv_columns(raw_csv_file_path, expected_column_names, raw_csv_expec
 
 
 def read_current_header(raw_csv_file_path):
+    """Helper.
+    Reads only the first line, so the header can be checked without loading the whole CSV.
+    """
     with open(raw_csv_file_path, "r", encoding="utf-8") as csv_file:
         csv_reader = csv.reader(csv_file)
         header_row = next(csv_reader, None)
@@ -97,6 +113,10 @@ def read_current_header(raw_csv_file_path):
 
 
 def load_saved_header(saved_header_file_path):
+    """Helper.
+    Returns None on the first run, when no baseline exists yet, so the caller knows to create one
+    instead of comparing.
+    """
     if not Path(saved_header_file_path).exists():
         return None
 
@@ -104,6 +124,9 @@ def load_saved_header(saved_header_file_path):
 
 
 def save_header(header_row, saved_header_file_path):
+    """Helper.
+    Stores this run's header as the baseline the next run compares against.
+    """
     Path(saved_header_file_path).parent.mkdir(parents=True, exist_ok=True)
 
     with open(saved_header_file_path, "w", encoding="utf-8", newline="") as csv_file:
@@ -113,6 +136,10 @@ def save_header(header_row, saved_header_file_path):
 
 
 def compare_header_names(current_header, saved_header, raw_csv_file_path, saved_header_file_path):
+    """Helper.
+    Stops the run if column names were added or removed since the last run, because a renamed column
+    can mean the data under it was replaced.
+    """
     added_names = set(current_header) - set(saved_header)
     removed_names = set(saved_header) - set(current_header)
 
@@ -145,6 +172,10 @@ def compare_header_names(current_header, saved_header, raw_csv_file_path, saved_
 
 
 def compare_header_order(current_header, saved_header, saved_header_file_path):
+    """Helper.
+    Stops the run if the same columns now appear in a different order, because the positional
+    override would put every name after the moved column on the wrong data.
+    """
     if current_header == saved_header:
         return
 
@@ -172,6 +203,10 @@ def compare_header_order(current_header, saved_header, saved_header_file_path):
 
 
 def validate_header_against_previous_run(raw_csv_file_path, saved_header_file_path):
+    """Entry point.
+    Compares this run's raw header to the one saved on the last run, not to CORRECT_COLUMNS_NAMES,
+    because the raw header is malformed and would never match config.
+    """
     current_header = read_current_header(raw_csv_file_path)
 
     if current_header is None:
@@ -189,10 +224,17 @@ def validate_header_against_previous_run(raw_csv_file_path, saved_header_file_pa
     compare_header_order(current_header, saved_header, saved_header_file_path)
 
     logger.info("Header unchanged since the last run.")
+    # Saving the baseline is the last line on purpose. Saving before comparing would
+    # store a bad header even when the check fails, so the next run would compare that
+    # bad header against itself and pass. The check would fire once and then go blind.
     save_header(current_header, saved_header_file_path)
 
 
 def read_saved_row_count(row_count_file_path):
+    """Helper.
+    Returns None on the first run, when no baseline exists yet, so the caller knows to create one
+    instead of comparing.
+    """
     if not Path(row_count_file_path).exists():
         return None
 
@@ -202,6 +244,9 @@ def read_saved_row_count(row_count_file_path):
 
 
 def save_row_count(row_count, row_count_file_path):
+    """Helper.
+    Stores this run's row count as the baseline the next run compares against.
+    """
     Path(row_count_file_path).parent.mkdir(parents=True, exist_ok=True)
 
     Path(row_count_file_path).write_text(str(row_count), encoding="utf-8")
@@ -209,6 +254,10 @@ def save_row_count(row_count, row_count_file_path):
 
 
 def compare_row_count(current_row_count, saved_row_count, max_drop_percent, row_count_file_path):
+    """Helper.
+    Stops the run if the row count fell by more than the allowed percent. The load only upserts and
+    never deletes, so a truncated file would leave stale rows in the database with no error.
+    """
     if current_row_count >= saved_row_count:
         increase = current_row_count - saved_row_count
         logger.info("Row count went from %s to %s, (+%s) ",
@@ -256,6 +305,10 @@ def compare_row_count(current_row_count, saved_row_count, max_drop_percent, row_
 
 
 def validate_row_count_against_previous_run(dataframe, row_count_file_path, max_drop_percent):
+    """Entry point.
+    Catches a truncated or incomplete source file by comparing its row count to the last run's,
+    while allowing the small drop that comes from games being delisted on Steam.
+    """
     current_count = len(dataframe)
     saved_row_count = read_saved_row_count(row_count_file_path)
 
@@ -266,10 +319,17 @@ def validate_row_count_against_previous_run(dataframe, row_count_file_path, max_
 
     compare_row_count(current_count, saved_row_count, max_drop_percent, row_count_file_path)
 
+    # Saving the baseline is the last line on purpose. Saving before comparing would
+    # store a bad count even when the check fails, so the next run would compare that
+    # bad count against itself and pass. The check would fire once and then go blind.
     save_row_count(current_count, row_count_file_path)
 
 
 def check_required_fields(dataframe, required_field):
+    """Helper.
+    Stops the run if any row is missing the primary key, because those rows cannot be loaded and
+    would lose all their bridge-table links.
+    """
     if required_field not in dataframe.columns:
         logger.error("Required field %s not found in dataframe", required_field)
         raise ValueError(f"Required field {required_field} not found in dataframe")
@@ -296,6 +356,11 @@ def check_required_fields(dataframe, required_field):
 
 
 def check_nan_counts(dataframe, critical_nan_columns):
+    """Helper.
+    Enforces a NaN limit only on the columns in CRITICAL_NAN_COLUMNS, because most columns here are
+    legitimately mostly empty (metacritic_url is 96% NaN on a healthy run) and a blanket rule would
+    fire every run on columns that are fine.
+    """
     total_rows = len(dataframe)
     breaches = {}
 
@@ -342,6 +407,11 @@ def check_nan_counts(dataframe, critical_nan_columns):
 
 def check_impossible_values(dataframe, main_table_unique_key,
                             value_range_rules, min_release_date, max_date_years_ahead):
+    """Helper.
+    Flags values that parse fine but cannot be real. The release date bounds matter most: Power BI
+    builds DimDate with CALENDARAUTO(), so one placeholder date like 9999-12-31 would stretch the date
+    table across thousands of empty days and break the Is Complete Year flag.
+    """
     findings = []
 
     for column, (minimum, maximum) in value_range_rules.items():
@@ -382,6 +452,8 @@ def check_impossible_values(dataframe, main_table_unique_key,
         ))
 
     # release dates outside sane bounds
+    # A placeholder date like 9999-12-31 parses as a valid date, so type conversion
+    # cannot catch it. These bounds are the only guard before it reaches DimDate.
     earliest = pd.Timestamp(min_release_date)
     latest = pd.Timestamp.today() + pd.DateOffset(years=max_date_years_ahead)
 
@@ -426,6 +498,11 @@ def check_impossible_values(dataframe, main_table_unique_key,
 
 
 def check_duplicates(dataframe, main_table_unique_key):
+    """Helper.
+    Checks only steam_games, because it is a plain column slice that never goes through a builder.
+    The lookup and bridge builders already call drop_duplicates, and .duplicated() uses the same
+    exact-string comparison, so checking them could only find what was already removed.
+    """
     # main table
     duplicate_mask = dataframe.duplicated(subset=main_table_unique_key)
     duplicate_count = duplicate_mask.sum()
@@ -452,6 +529,10 @@ def check_duplicates(dataframe, main_table_unique_key):
 
 def validate_transformed_data(steam_games_dataframe, main_table_unique_key, min_release_date,
                               max_date_years_ahead, critical_nan_columns, value_range_rules):
+    """Entry point.
+    Runs every Gate 2 check in one place, so main.py has a single step to call between transform
+    and load.
+    """
     logger.info("Gate 2 validation started")
 
     check_required_fields(steam_games_dataframe, main_table_unique_key)

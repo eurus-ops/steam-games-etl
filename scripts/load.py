@@ -1,3 +1,5 @@
+"""Converts the transformed DataFrames into records and upserts them into PostgreSQL."""
+
 from sqlalchemy import create_engine, URL, text
 from sqlalchemy.exc import SQLAlchemyError
 from logger_config import logger
@@ -8,10 +10,18 @@ import config
 
 
 def save_cleaned_dataframe(converted_cols_dataframe):
+    """Helper.
+    Writes the cleaned data to CSV so it can be inspected outside the database. The pipeline does
+    not currently call it.
+    """
     converted_cols_dataframe.to_csv(config.CLEANED_CSV_FILE_PATH, index=False)
 
 
 def create_database_url():
+    """Entry point.
+    Builds the connection URL with URL.create rather than a hand-built string, so a password with
+    special characters does not break the connection.
+    """
     database_url = URL.create(
         drivername=config.DB_DRIVER_NAME,
         username=config.DB_CONFIG["user"],
@@ -25,6 +35,10 @@ def create_database_url():
 
 
 def make_engine(db_url):
+    """Entry point.
+    Creates the one SQLAlchemy engine that every load step shares, so they all use the same
+    connection pool.
+    """
     engine = create_engine(db_url)
     logger.info("Engine created")
     return engine
@@ -62,6 +76,11 @@ def nan_to_none(dataframe):
 
 
 def convert_dataframe_to_records(data):
+    """Entry point.
+    Sends every DataFrame through nan_to_none on its way to records, so missing values reach
+    PostgreSQL as NULL instead of the string 'NaN'. Accepts a dict so all lookup tables
+    convert in one call.
+    """
     if isinstance(data, pd.DataFrame):
         logger.info("Dataframe converted to records")
         return nan_to_none(data).to_dict(orient="records")
@@ -77,6 +96,10 @@ def convert_dataframe_to_records(data):
 
 
 def upsert_one_table(engine, table_name, columns_list, conflict_column, records):
+    """Entry point.
+    Uses INSERT ... ON CONFLICT so the load is idempotent: rerunning the pipeline updates existing
+    rows instead of failing on duplicate keys or creating copies.
+    """
     if not records:
         logger.info("No records to upsert for table: %s", table_name)
         return
@@ -87,6 +110,7 @@ def upsert_one_table(engine, table_name, columns_list, conflict_column, records)
     if update_lines:
         conflict_action = f"DO UPDATE SET {', '.join(update_lines)}"
     else:
+        # A lookup table has only its conflict column, so there is nothing to update.
         conflict_action = "DO NOTHING"
 
     sql_text = text(f"""
@@ -106,6 +130,10 @@ def upsert_one_table(engine, table_name, columns_list, conflict_column, records)
 
 
 def upsert_lookup_tables(engine, lookup_records):
+    """Entry point.
+    Upserts every lookup table before the bridge tables load, because the bridge load reads the
+    lookup IDs back from the database.
+    """
     for table_name, records in lookup_records.items():
         columns_list = config.TABLES_AND_COLUMNS_MAPPING[table_name]
         conflict_column = config.LOOKUP_TABLE_CONFLICT_COLUMNS[table_name]
@@ -120,6 +148,10 @@ def upsert_lookup_tables(engine, lookup_records):
 
 
 def prepare_bridge_load_dataframe(connection, bridge_df, lookup_table, output_col, fk_col):
+    """Helper.
+    Swaps each name for the ID PostgreSQL gave it, which the bridge table needs as its foreign key.
+    Those IDs only exist after the lookup upsert, so they are read back from the database.
+    """
     sql_text = text(f"""
         SELECT id AS lookup_id, {output_col}
         FROM {lookup_table}
@@ -142,10 +174,16 @@ def prepare_bridge_load_dataframe(connection, bridge_df, lookup_table, output_co
 
 
 def insert_bridge_dataframe(connection, target_bridge_table, final_to_load_df, fk_col):
+    """Helper.
+    Inserts game-to-lookup links and skips any that already exist, so a rerun does not fail on the
+    bridge table's composite key.
+    """
     if final_to_load_df.empty:
         logger.info(f"No rows to load for bridge table: {target_bridge_table}")
         return
 
+    # nan_to_none is deliberately not applied here. This DataFrame is the result of an
+    # inner join on two non-null ID columns, so it cannot contain NaN.
     records = final_to_load_df.to_dict(orient="records")
 
     insert_sql = text(f"""
@@ -159,6 +197,10 @@ def insert_bridge_dataframe(connection, target_bridge_table, final_to_load_df, f
 
 
 def load_bridge_tables(engine, bridge_dataframes, bridge_table_mapping):
+    """Entry point.
+    Loads all bridge tables inside one transaction, so a failure part way through rolls back every
+    bridge table instead of leaving some loaded and some not.
+    """
     target_bridge_table = ""
 
     try:
