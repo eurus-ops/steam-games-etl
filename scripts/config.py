@@ -2,6 +2,7 @@ from pathlib import Path
 import os
 from dotenv import load_dotenv
 
+
 load_dotenv()
 
 DB_CONFIG = {
@@ -17,10 +18,15 @@ DB_DRIVER_NAME = "postgresql+psycopg2"
 PROJECT_ROOT_PATH = Path(__file__).resolve().parent.parent
 RAW_DATA_DIR = PROJECT_ROOT_PATH / "data" / "raw"
 CLEANED_DATA_DIR = PROJECT_ROOT_PATH / "data" / "cleaned"
+METADATA_DIR = PROJECT_ROOT_PATH / "data" / "metadata"
 
 RAW_CSV_FILE_PATH = RAW_DATA_DIR / "games.csv"
 RAW_JSON_FILE_PATH = RAW_DATA_DIR / "games.json"
 CLEANED_CSV_FILE_PATH = CLEANED_DATA_DIR / "steam_games_cleaned.csv"
+SAVED_HEADER_FILE_PATH = METADATA_DIR / "last_header.csv"
+LAST_ROW_COUNT_FILE_PATH = METADATA_DIR / "last_row_count.txt"
+
+MAX_ROW_COUNT_DROP_PERCENT = 5
 
 LOGS_DIR = PROJECT_ROOT_PATH / "logs"
 LOG_FILE_PATH = LOGS_DIR / "etl_pipeline.log"
@@ -28,6 +34,24 @@ LOG_FILE_PATH = LOGS_DIR / "etl_pipeline.log"
 TABLE_NAME = "steam_games"
 MAIN_TABLE_UNIQUE_KEY = "game_id"
 LOOKUP_TABLE_UNIQUE_KEY = "id"
+
+MIN_RELEASE_DATE = "1997-01-01"
+MAX_RELEASE_DATE_YEARS_AHEAD = 2
+
+CRITICAL_NAN_COLUMNS = {
+    "game_name":    1,
+    "price":        5,
+    "release_date": 5,
+}
+
+VALUE_RANGE_RULES = {
+    "price":            (0, None),
+    "metacritic_score": (0, 100),
+    "user_score":       (0, 100),
+    "positive":         (0, None),
+    "negative":         (0, None),
+    "achievements":     (0, None),
+}
 
 CORRECT_COLUMNS_NAMES = [
     "AppID", "Name", "Release date", "Estimated owners",
